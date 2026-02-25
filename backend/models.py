@@ -47,3 +47,11 @@ class ProjectCreateResponse(BaseModel):
 class NextRoundResponse(BaseModel):
     status: str  # 'continue' or 'complete'
     cards: list[CardOut] = []
+
+
+class InterestsSubmit(BaseModel):
+    interests: list[str]
+
+
+class RssFeedAdd(BaseModel):
+    url: str

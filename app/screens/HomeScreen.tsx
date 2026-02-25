@@ -27,8 +27,18 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.title}>Scroll</Text>
-        <Text style={styles.subtitle}>Your projects</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Scroll</Text>
+            <Text style={styles.subtitle}>Your projects</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Settings")}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.settingsLink}>Settings</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <FlatList
@@ -90,8 +100,14 @@ export default function HomeScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#f8fafc" },
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
   title: { fontSize: 32, fontWeight: 800, color: "#1a1a2e" },
   subtitle: { fontSize: 14, color: "#94a3b8", marginTop: 4 },
+  settingsLink: { fontSize: 15, color: "#8B5CF6", fontWeight: 500 },
   list: { padding: 20, paddingBottom: 100 },
   empty: { alignItems: "center", paddingTop: 60 },
   emptyText: { fontSize: 17, fontWeight: 600, color: "#64748b" },

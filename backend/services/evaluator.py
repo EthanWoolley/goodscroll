@@ -38,9 +38,13 @@ def evaluate_and_generate(
     qa_rows: list[dict],
     project_id: str,
     next_round: int,
+    api_key: str | None = None,
 ) -> dict:
     """Returns {"status": "complete"} or {"status": "continue", "cards": [...]}"""
-    client = anthropic.Anthropic()
+    if api_key and api_key.strip():
+        client = anthropic.Anthropic(api_key=api_key.strip())
+    else:
+        client = anthropic.Anthropic()
     qa_history = build_qa_history(qa_rows)
 
     prompt = EVAL_PROMPT_TEMPLATE.format(

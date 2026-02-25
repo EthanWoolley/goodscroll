@@ -33,8 +33,12 @@ def generate_cards(
     end_goal: str | None,
     project_id: str,
     round_number: int,
+    api_key: str | None = None,
 ) -> list[dict]:
-    client = anthropic.Anthropic()
+    if api_key and api_key.strip():
+        client = anthropic.Anthropic(api_key=api_key.strip())
+    else:
+        client = anthropic.Anthropic()
 
     user_msg = f"Project type: {project_type}\nDescription: {project_description}"
     if end_goal:

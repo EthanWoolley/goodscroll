@@ -29,3 +29,15 @@ CREATE TABLE IF NOT EXISTS answers (
   FOREIGN KEY (card_id) REFERENCES cards(id),
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS user_interests (
+  id TEXT PRIMARY KEY,
+  interests TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rss_feeds (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL
+);

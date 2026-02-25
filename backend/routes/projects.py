@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from backend.db.database import get_connection
 from backend.models import (
@@ -53,9 +53,10 @@ def list_projects():
 
 
 @router.post("", response_model=ProjectCreateResponse)
-def create_project(body: ProjectCreate):
+def create_project(request: Request, body: ProjectCreate):
     project_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    api_key = (request.headers.get("X-Anthropic-Key") or "").strip()
 
     conn = get_connection()
     conn.execute(
@@ -70,6 +71,7 @@ def create_project(body: ProjectCreate):
         end_goal=body.end_goal,
         project_id=project_id,
         round_number=1,
+        api_key=api_key or None,
     )
 
     for c in cards:
@@ -110,7 +112,8 @@ def get_cards(project_id: str):
 
 
 @router.post("/{project_id}/answers", response_model=NextRoundResponse)
-def submit_answers(project_id: str, body: AnswersSubmit):
+def submit_answers(request: Request, project_id: str, body: AnswersSubmit):
+    api_key = (request.headers.get("X-Anthropic-Key") or "").strip()
     conn = get_connection()
     project_row = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     if not project_row:
@@ -148,6 +151,7 @@ def submit_answers(project_id: str, body: AnswersSubmit):
         qa_rows=qa_list,
         project_id=project_id,
         next_round=max_round + 1,
+        api_key=api_key or None,
     )
 
     if result["status"] == "complete":

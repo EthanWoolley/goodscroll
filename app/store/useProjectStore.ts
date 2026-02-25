@@ -1,10 +1,11 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
-import { api, Card, Project } from "../api/client";
+import { api, type FeedCard, isRssCard, type Project } from "../api/client";
 
 interface ProjectStore {
   projects: Project[];
   currentProjectId: string | null;
-  cards: Card[];
+  cards: FeedCard[];
   loading: boolean;
 
   fetchProjects: () => Promise<void>;
@@ -16,12 +17,19 @@ interface ProjectStore {
     deadline?: string;
   }) => Promise<string>;
   loadCards: (projectId: string) => Promise<void>;
-  setCards: (cards: Card[]) => void;
+  setCards: (cards: FeedCard[]) => void;
   submitAnswers: (
     projectId: string,
     answers: { card_id: string; answer: string }[]
   ) => Promise<"continue" | "complete">;
   skipCard: (projectId: string, cardId: string) => Promise<void>;
+}
+
+function mergeFeedCards(
+  projectCards: import("../api/client").Card[],
+  rssCards: import("../api/client").RssCard[]
+): FeedCard[] {
+  return [...projectCards, ...rssCards];
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -43,7 +51,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   createProject: async (data) => {
     set({ loading: true });
     try {
-      const res = await api.createProject(data);
+      const key = await AsyncStorage.getItem("anthropic_api_key");
+      const res = await api.createProject(data, {
+        anthropicKey: key ?? undefined,
+      });
       set((s) => ({
         projects: [res.project, ...s.projects],
         currentProjectId: res.project.id,
@@ -58,8 +69,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   loadCards: async (projectId) => {
     set({ loading: true, currentProjectId: projectId });
     try {
-      const cards = await api.getCards(projectId);
-      set({ cards });
+      const [projectCards, rssCards] = await Promise.all([
+        api.getCards(projectId),
+        api.getRssCards(),
+      ]);
+      set({ cards: mergeFeedCards(projectCards, rssCards) });
+    } catch {
+      set({ cards: [] });
     } finally {
       set({ loading: false });
     }
@@ -70,8 +86,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   submitAnswers: async (projectId, answers) => {
     set({ loading: true });
     try {
-      const res = await api.submitAnswers(projectId, answers);
-      set({ cards: res.cards });
+      const key = await AsyncStorage.getItem("anthropic_api_key");
+      const res = await api.submitAnswers(projectId, answers, {
+        anthropicKey: key ?? undefined,
+      });
+      const prevCards = get().cards;
+      const rssCards = prevCards.filter(isRssCard);
+      set({ cards: [...res.cards, ...rssCards] });
       return res.status;
     } finally {
       set({ loading: false });

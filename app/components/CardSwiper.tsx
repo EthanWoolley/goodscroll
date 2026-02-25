@@ -6,15 +6,16 @@ import {
   PanResponder,
   Dimensions,
 } from "react-native";
-import { Card } from "../api/client";
+import { type FeedCard, isRssCard } from "../api/client";
 import MultipleChoiceCard from "./MultipleChoiceCard";
 import OpenEndedCard from "./OpenEndedCard";
+import RSSCard from "./RSSCard";
 
 const { height } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 80;
 
 interface Props {
-  card: Card;
+  card: FeedCard;
   onAnswer: (answer: string) => void;
   onSkip: () => void;
 }
@@ -52,17 +53,21 @@ export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
     })
   ).current;
 
+  const cardContent = isRssCard(card) ? (
+    <RSSCard card={card} onSkip={onSkip} />
+  ) : card.type === "multiple_choice" ? (
+    <MultipleChoiceCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
+  ) : (
+    <OpenEndedCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
+  );
+
   return (
     <View style={styles.container}>
       <Animated.View
         style={{ transform: [{ translateY }] }}
         {...panResponder.panHandlers}
       >
-        {card.type === "multiple_choice" ? (
-          <MultipleChoiceCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
-        ) : (
-          <OpenEndedCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
-        )}
+        {cardContent}
       </Animated.View>
     </View>
   );
