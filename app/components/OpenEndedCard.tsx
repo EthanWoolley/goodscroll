@@ -27,12 +27,15 @@ export default function OpenEndedCard({ card, onAnswer, onSkip }: Props) {
 
       <TextInput
         style={styles.input}
-        multiline
         placeholder="Type your answer..."
         placeholderTextColor="#94a3b8"
         value={text}
         onChangeText={setText}
-        textAlignVertical="top"
+        returnKeyType="done"
+        onSubmitEditing={() => {
+          if (text.trim()) onAnswer(text.trim());
+        }}
+        blurOnSubmit
       />
 
       <View style={styles.actions}>
@@ -87,7 +90,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 15,
     color: "#1e293b",
-    minHeight: 120,
+    minHeight: 52,
     backgroundColor: "#fafafa",
     marginBottom: 24,
   },

@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -133,20 +135,26 @@ export default function FeedScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.progress}>
-        <Text style={styles.progressText}>
-          {currentIndex + 1} / {localCards.length}
-        </Text>
-      </View>
-      <CardSwiper
-        key={currentCard.id}
-        card={currentCard}
-        onAnswer={handleAnswer}
-        onSkip={handleSkip}
-      />
-      <View style={styles.hint}>
-        <Text style={styles.hintText}>Swipe up to skip</Text>
-      </View>
+      <KeyboardAvoidingView
+        style={styles.safe}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 60 : 0}
+      >
+        <View style={styles.progress}>
+          <Text style={styles.progressText}>
+            {currentIndex + 1} / {localCards.length}
+          </Text>
+        </View>
+        <CardSwiper
+          key={currentCard.id}
+          card={currentCard}
+          onAnswer={handleAnswer}
+          onSkip={handleSkip}
+        />
+        <View style={styles.hint}>
+          <Text style={styles.hintText}>Swipe up to skip</Text>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
