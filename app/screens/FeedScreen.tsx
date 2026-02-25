@@ -145,7 +145,7 @@ export default function FeedScreen({ route, navigation }: Props) {
         onSkip={handleSkip}
       />
       <View style={styles.hint}>
-        <Text style={styles.hintText}>Swipe down to skip</Text>
+        <Text style={styles.hintText}>Swipe up to skip</Text>
       </View>
     </SafeAreaView>
   );

@@ -31,12 +31,8 @@ export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dy < -SWIPE_THRESHOLD) {
-          // Swiped up — only meaningful for multiple choice with a selection;
-          // handled via button tap instead for reliability
-        }
-        if (gs.dy > SWIPE_THRESHOLD) {
           Animated.timing(translateY, {
-            toValue: height,
+            toValue: -height,
             duration: 250,
             useNativeDriver: true,
           }).start(() => {

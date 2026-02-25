@@ -35,7 +35,7 @@ export default function RSSCard({ card, onSkip }: Props) {
         <Text style={styles.openButtonText}>Open article</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.skipHint} onPress={onSkip}>
-        <Text style={styles.skipHintText}>Swipe down to skip</Text>
+        <Text style={styles.skipHintText}>Swipe up to skip</Text>
       </TouchableOpacity>
     </View>
   );

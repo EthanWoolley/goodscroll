@@ -9,22 +9,40 @@ SYSTEM_PROMPT = """You are a project assistant. Given a project description, gen
 For a "Creating" project: ask questions that extract the user's existing knowledge, constraints, key decisions, and next steps.
 For a "Learning" project: ask questions that assess current knowledge level, clarify what specifically they want to learn, and identify any deadlines or goals.
 
-Return ONLY a JSON array. No preamble, no markdown. Each item must be one of these two formats:
+Never respond with plain-text clarification or meta-questions. Always output only the JSON array of questions. If the description is vague or missing details, include questions in the array that ask for those details.
+
+Each item must be one of these two formats:
 
 Multiple choice:
-{
-  "type": "multiple_choice",
-  "question": "...",
-  "options": ["option A", "option B", "option C", "option D"]
-}
+{ "type": "multiple_choice", "question": "...", "options": ["option A", "option B", "option C", "option D"] }
 
 Open ended:
-{
-  "type": "open_ended",
-  "question": "..."
-}
+{ "type": "open_ended", "question": "..." }
 
 Generate between 4 and 6 questions. Mix multiple choice and open ended. Keep questions specific to the project description provided. Do not generate generic questions."""
+
+# JSON schema for structured output so the API returns only valid JSON (no plain-text clarification).
+# Root must be an object per Anthropic structured output; we use "questions" array.
+QUESTIONS_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string", "enum": ["multiple_choice", "open_ended"]},
+                    "question": {"type": "string"},
+                    "options": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["type", "question"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["questions"],
+    "additionalProperties": False,
+}
 
 
 def generate_cards(
@@ -49,13 +67,38 @@ def generate_cards(
         max_tokens=1024,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_msg}],
+        output_config={
+            "format": {"type": "json_schema", "schema": QUESTIONS_JSON_SCHEMA},
+        },
     )
 
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
 
-    questions = json.loads(raw)
+    if not raw:
+        raise ValueError("Anthropic returned an empty response for card generation")
+
+    try:
+        parsed = json.loads(raw)
+        # Structured output returns {"questions": [...]}; legacy path may return array at root
+        if isinstance(parsed, dict) and "questions" in parsed:
+            questions = parsed["questions"]
+        elif isinstance(parsed, list):
+            questions = parsed
+        else:
+            questions = []
+    except json.JSONDecodeError:
+        # Try to extract a JSON array from the response (e.g. preamble or trailing text)
+        start = raw.find("[")
+        end = raw.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            questions = json.loads(raw[start : end + 1])
+        else:
+            raise ValueError(
+                "Anthropic response was not valid JSON. First 200 chars: %s"
+                % repr(raw[:200])
+            ) from None
     now = datetime.now(timezone.utc).isoformat()
 
     cards = []
