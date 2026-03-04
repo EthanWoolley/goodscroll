@@ -11,7 +11,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.content}>
-        <Text style={styles.title}>Scroll</Text>
+        <Text style={styles.title}>goodscroll</Text>
         <Text style={styles.description}>
           Scroll through decisions, questions, and things worth knowing. Actually
           get things done.
