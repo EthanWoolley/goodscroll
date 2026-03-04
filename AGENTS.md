@@ -14,7 +14,7 @@ GoodScroll is a two-service app: a Python FastAPI backend and a React Native Exp
 ### Environment
 
 - `ANTHROPIC_API_KEY` must be set in a `.env` file at the repo root (loaded by `python-dotenv`). The frontend can alternatively pass it per-request via the `X-Anthropic-Key` header.
-- The `BASE_URL` in `app/api/client.ts` is hardcoded to `192.168.1.109:8000`. For local/cloud dev, this should point to `localhost:8000`.
+- The `BASE_URL` in `app/api/client.ts` is hardcoded to a developer's LAN IP. For cloud dev, change it to `http://127.0.0.1:8000` (use `127.0.0.1`, **not** `localhost` — Chrome in this environment resolves `localhost` to IPv6 `::1` first, which uvicorn doesn't bind to, causing `ERR_CONNECTION_RESET`).
 
 ### Gotchas
 
@@ -22,3 +22,5 @@ GoodScroll is a two-service app: a Python FastAPI backend and a React Native Exp
 - No ESLint or Python linter is configured. TypeScript checking: `cd app && npx tsc --noEmit`.
 - No automated test suite exists in this codebase.
 - `python3.12-venv` system package is required to create the Python virtual environment (`sudo apt-get install -y python3.12-venv`).
+- After changing `app/api/client.ts`, you **must** restart the Expo dev server with `--clear` flag (or delete `.expo/` and `node_modules/.cache`) for the Metro bundler to pick up the new code. Hot reload does NOT reliably update the bundle for this file.
+- The backend binds to `0.0.0.0:8000` but only IPv4; IPv6 (`::1`) connections will fail.
