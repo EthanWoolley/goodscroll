@@ -1,4 +1,4 @@
-# Scroll — v0.0.1 Prototype
+# GoodScroll
 
 AI-powered project assistant that generates targeted question cards to extract context about your projects.
 
