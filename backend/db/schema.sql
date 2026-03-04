@@ -41,3 +41,24 @@ CREATE TABLE IF NOT EXISTS rss_feeds (
   url TEXT NOT NULL UNIQUE,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS wikipedia_shown (
+  id TEXT PRIMARY KEY,
+  article_title TEXT NOT NULL,
+  shown_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS project_keywords (
+  project_id TEXT PRIMARY KEY,
+  keywords TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  description_snapshot TEXT,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE IF NOT EXISTS project_context_overrides (
+  project_id TEXT PRIMARY KEY,
+  context TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);

@@ -8,27 +8,29 @@ import {
   Dimensions,
 } from "react-native";
 import { Card } from "../api/client";
+import { colors, fontFamily } from "../theme";
 
-const { width } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 
 interface Props {
   card: Card;
   onAnswer: (answer: string) => void;
   onSkip: () => void;
+  projectTitle?: string;
 }
 
-export default function OpenEndedCard({ card, onAnswer, onSkip }: Props) {
+export default function OpenEndedCard({ card, onAnswer, onSkip, projectTitle }: Props) {
   const [text, setText] = useState("");
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>OPEN ENDED</Text>
+      <Text style={styles.label}>{projectTitle ?? "Question"}</Text>
       <Text style={styles.question}>{card.question}</Text>
 
       <TextInput
         style={styles.input}
         placeholder="Type your answer..."
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.textSecondary}
         value={text}
         onChangeText={setText}
         returnKeyType="done"
@@ -59,40 +61,42 @@ export default function OpenEndedCard({ card, onAnswer, onSkip }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    width: width - 40,
-    backgroundColor: "#fff",
-    borderRadius: 20,
+    flex: 1,
+    width: "100%",
+    minHeight: height,
+    backgroundColor: colors.surface,
+    borderRadius: 0,
     padding: 28,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   label: {
     fontSize: 11,
-    fontWeight: 700,
-    color: "#059669",
+    fontWeight: "700",
+    color: colors.textSecondary,
     letterSpacing: 1.2,
     marginBottom: 16,
+    fontFamily,
   },
   question: {
     fontSize: 20,
-    fontWeight: 600,
-    color: "#1a1a2e",
+    fontWeight: "600",
+    color: colors.textPrimary,
     lineHeight: 28,
     marginBottom: 20,
+    fontFamily,
   },
   input: {
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 0,
     padding: 16,
     fontSize: 15,
-    color: "#1e293b",
+    color: colors.textPrimary,
     minHeight: 52,
-    backgroundColor: "#fafafa",
+    backgroundColor: colors.background,
     marginBottom: 24,
+    fontFamily,
   },
   actions: {
     flexDirection: "row",
@@ -102,28 +106,34 @@ const styles = StyleSheet.create({
   skipBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#f1f5f9",
+    borderRadius: 0,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
   },
   skipText: {
     fontSize: 15,
-    fontWeight: 600,
-    color: "#94a3b8",
+    fontWeight: "600",
+    color: colors.textSecondary,
+    fontFamily,
   },
   answerBtn: {
     flex: 1,
     paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#059669",
+    borderRadius: 0,
+    backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
   },
   answerBtnDisabled: {
-    backgroundColor: "#a7f3d0",
+    backgroundColor: colors.surfaceRaised,
   },
   answerText: {
     fontSize: 15,
-    fontWeight: 600,
-    color: "#fff",
+    fontWeight: "600",
+    color: colors.background,
+    fontFamily,
   },
 });

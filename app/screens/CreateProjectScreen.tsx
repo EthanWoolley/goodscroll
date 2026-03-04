@@ -14,9 +14,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useProjectStore } from "../store/useProjectStore";
-import type { RootStackParamList } from "../App";
+import type { ProjectsStackParamList } from "../App";
+import { colors, fontFamily } from "../theme";
 
-type Props = NativeStackScreenProps<RootStackParamList, "CreateProject">;
+type Props = NativeStackScreenProps<ProjectsStackParamList, "CreateProject">;
 
 export default function CreateProjectScreen({ navigation }: Props) {
   const { createProject, loading } = useProjectStore();
@@ -62,7 +63,7 @@ export default function CreateProjectScreen({ navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="What are you working on?"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textSecondary}
           value={title}
           onChangeText={setTitle}
         />
@@ -71,7 +72,7 @@ export default function CreateProjectScreen({ navigation }: Props) {
         <TextInput
           style={[styles.input, styles.multiline]}
           placeholder="Brain-dump everything about this project..."
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textSecondary}
           multiline
           textAlignVertical="top"
           value={description}
@@ -118,7 +119,7 @@ export default function CreateProjectScreen({ navigation }: Props) {
         <TextInput
           style={styles.input}
           placeholder="What does done look like?"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textSecondary}
           value={endGoal}
           onChangeText={setEndGoal}
         />
@@ -166,7 +167,7 @@ export default function CreateProjectScreen({ navigation }: Props) {
           onPress={handleSubmit}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.background} />
           ) : (
             <Text style={styles.submitText}>Create & Generate Cards</Text>
           )}
@@ -177,55 +178,59 @@ export default function CreateProjectScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   content: { padding: 24, paddingBottom: 60 },
   heading: {
     fontSize: 28,
-    fontWeight: 800,
-    color: "#1a1a2e",
+    fontWeight: "800",
+    color: colors.textPrimary,
     marginBottom: 24,
+    fontFamily,
   },
   label: {
     fontSize: 13,
-    fontWeight: 600,
-    color: "#64748b",
+    fontWeight: "600",
+    color: colors.textSecondary,
     marginBottom: 6,
     marginTop: 16,
+    fontFamily,
   },
   input: {
-    backgroundColor: "#fff",
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 0,
     padding: 14,
     fontSize: 15,
-    color: "#1e293b",
+    color: colors.textPrimary,
+    fontFamily,
   },
   multiline: { minHeight: 120 },
-  toggle: {
-    flexDirection: "row",
-    gap: 8,
-  },
+  toggle: { flexDirection: "row", gap: 8 },
   toggleBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: "#f1f5f9",
+    borderRadius: 0,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     alignItems: "center",
   },
-  toggleActive: { backgroundColor: "#8B5CF6" },
-  toggleText: { fontSize: 14, fontWeight: 600, color: "#64748b" },
-  toggleTextActive: { color: "#fff" },
+  toggleActive: { backgroundColor: colors.accent, borderColor: colors.border },
+  toggleText: { fontSize: 14, fontWeight: "600", color: colors.textSecondary, fontFamily },
+  toggleTextActive: { color: colors.background, fontFamily },
   deadlineRow: { flexDirection: "row", gap: 8 },
   deadlineToggle: { flex: 1 },
   submit: {
     marginTop: 32,
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: 0,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  submitDisabled: { backgroundColor: "#d4d0f0" },
-  submitText: { color: "#fff", fontSize: 16, fontWeight: 700 },
+  submitDisabled: { backgroundColor: colors.surfaceRaised },
+  submitText: { color: colors.background, fontSize: 16, fontWeight: "700", fontFamily },
 });

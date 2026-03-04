@@ -8,13 +8,15 @@ from backend.db.database import get_connection
 from backend.models import (
     AnswersSubmit,
     CardOut,
+    ContextOut,
+    ContextUpdate,
     NextRoundResponse,
     ProjectCreate,
     ProjectCreateResponse,
     ProjectOut,
 )
 from backend.services.card_generator import generate_cards
-from backend.services.evaluator import evaluate_and_generate
+from backend.services.evaluator import build_qa_history, evaluate_and_generate
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -44,12 +46,76 @@ def _row_to_project(row) -> ProjectOut:
     )
 
 
+def _get_project_context(conn, project_id: str) -> str:
+    """Build context string from answers (Q&A format). Used when no override."""
+    override = conn.execute(
+        "SELECT context FROM project_context_overrides WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    if override:
+        return override["context"]
+    qa_rows = conn.execute(
+        """SELECT c.question, a.answer
+           FROM answers a
+           JOIN cards c ON a.card_id = c.id
+           WHERE a.project_id = ?
+           ORDER BY a.created_at""",
+        (project_id,),
+    ).fetchall()
+    qa_list = [{"question": r["question"], "answer": r["answer"]} for r in qa_rows]
+    return build_qa_history(qa_list)
+
+
 @router.get("", response_model=list[ProjectOut])
 def list_projects():
     conn = get_connection()
     rows = conn.execute("SELECT * FROM projects ORDER BY created_at DESC").fetchall()
     conn.close()
     return [_row_to_project(r) for r in rows]
+
+
+@router.get("/{project_id}/context", response_model=ContextOut)
+def get_project_context(project_id: str):
+    conn = get_connection()
+    project = conn.execute("SELECT id, title FROM projects WHERE id = ?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Project not found")
+    context = _get_project_context(conn, project_id)
+    conn.close()
+    return ContextOut(context=context, project_title=project["title"])
+
+
+@router.put("/{project_id}/context", response_model=ContextOut)
+def put_project_context(project_id: str, body: ContextUpdate):
+    conn = get_connection()
+    project = conn.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+    if not project:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Project not found")
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """INSERT INTO project_context_overrides (project_id, context, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(project_id) DO UPDATE SET context = excluded.context, updated_at = excluded.updated_at""",
+        (project_id, body.context, now),
+    )
+    conn.commit()
+    context = body.context
+    conn.close()
+    return ContextOut(context=context)
+
+
+@router.delete("/{project_id}/context/override")
+def delete_project_context_override(project_id: str):
+    conn = get_connection()
+    conn.execute(
+        "DELETE FROM project_context_overrides WHERE project_id = ?",
+        (project_id,),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @router.post("", response_model=ProjectCreateResponse)
@@ -138,13 +204,13 @@ def submit_answers(request: Request, project_id: str, body: AnswersSubmit):
            ORDER BY a.created_at""",
         (project_id,),
     ).fetchall()
-
     qa_list = [{"question": r["question"], "answer": r["answer"]} for r in qa_rows]
 
     max_round = conn.execute(
         "SELECT MAX(round) as mr FROM cards WHERE project_id = ?", (project_id,)
     ).fetchone()["mr"] or 1
 
+    context_str = _get_project_context(conn, project_id)
     result = evaluate_and_generate(
         project_type=project_row["project_type"],
         description=project_row["description"],
@@ -152,6 +218,7 @@ def submit_answers(request: Request, project_id: str, body: AnswersSubmit):
         project_id=project_id,
         next_round=max_round + 1,
         api_key=api_key or None,
+        qa_history_override=context_str,
     )
 
     if result["status"] == "complete":

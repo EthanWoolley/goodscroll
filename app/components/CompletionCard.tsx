@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+import { colors, fontFamily } from "../theme";
 
-const { width } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
 
 interface Props {
   onGoHome: () => void;
@@ -25,45 +26,50 @@ export default function CompletionCard({ onGoHome }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    width: width - 40,
-    backgroundColor: "#fff",
-    borderRadius: 20,
+    flex: 1,
+    width: "100%",
+    minHeight: height,
+    backgroundColor: colors.surface,
+    borderRadius: 0,
     padding: 36,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 5,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   emoji: {
     fontSize: 40,
-    fontWeight: 700,
-    color: "#059669",
+    fontWeight: "700",
+    color: colors.textPrimary,
     marginBottom: 16,
+    fontFamily,
   },
   title: {
     fontSize: 22,
-    fontWeight: 700,
-    color: "#1a1a2e",
+    fontWeight: "700",
+    color: colors.textPrimary,
     marginBottom: 12,
+    fontFamily,
   },
   message: {
     fontSize: 15,
-    color: "#64748b",
+    color: colors.textSecondary,
     textAlign: "center",
     lineHeight: 22,
     marginBottom: 28,
+    fontFamily,
   },
   button: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 14,
     paddingHorizontal: 36,
-    borderRadius: 12,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   buttonText: {
-    color: "#fff",
+    color: colors.background,
     fontSize: 15,
-    fontWeight: 600,
+    fontWeight: "600",
+    fontFamily,
   },
 });

@@ -7,20 +7,31 @@ import {
   Dimensions,
 } from "react-native";
 import { type FeedCard, isRssCard } from "../api/client";
+import type { WikipediaCardData } from "./WikipediaCard";
 import MultipleChoiceCard from "./MultipleChoiceCard";
 import OpenEndedCard from "./OpenEndedCard";
 import RSSCard from "./RSSCard";
+import WikipediaCard from "./WikipediaCard";
 
 const { height } = Dimensions.get("window");
 const SWIPE_THRESHOLD = 80;
 
-interface Props {
-  card: FeedCard;
-  onAnswer: (answer: string) => void;
-  onSkip: () => void;
+export type SwipeableCard = FeedCard | (WikipediaCardData & { type?: "wikipedia" });
+
+function isWikipediaCard(card: SwipeableCard): card is WikipediaCardData {
+  return "source_term" in card && "extract" in card && !("question" in card);
 }
 
-export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
+interface Props {
+  card: SwipeableCard;
+  onSwipeUp: () => void;
+  onSwipeDown: () => void;
+  onAnswer: (answer: string) => void;
+  onSkip: () => void;
+  projectTitle?: string;
+}
+
+export default function CardSwiper({ card, onSwipeUp, onSwipeDown, onAnswer, onSkip, projectTitle }: Props) {
   const translateY = useRef(new Animated.Value(0)).current;
 
   const panResponder = useRef(
@@ -37,7 +48,18 @@ export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
             useNativeDriver: true,
           }).start(() => {
             translateY.setValue(0);
-            onSkip();
+            onSwipeUp();
+          });
+          return;
+        }
+        if (gs.dy > SWIPE_THRESHOLD) {
+          Animated.timing(translateY, {
+            toValue: height,
+            duration: 250,
+            useNativeDriver: true,
+          }).start(() => {
+            translateY.setValue(0);
+            onSwipeDown();
           });
           return;
         }
@@ -49,18 +71,20 @@ export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
     })
   ).current;
 
-  const cardContent = isRssCard(card) ? (
+  const cardContent = isWikipediaCard(card) ? (
+    <WikipediaCard card={card} onSkip={onSkip} />
+  ) : isRssCard(card) ? (
     <RSSCard card={card} onSkip={onSkip} />
   ) : card.type === "multiple_choice" ? (
-    <MultipleChoiceCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
+    <MultipleChoiceCard card={card} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
   ) : (
-    <OpenEndedCard card={card} onAnswer={onAnswer} onSkip={onSkip} />
+    <OpenEndedCard card={card} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
   );
 
   return (
     <View style={styles.container}>
       <Animated.View
-        style={{ transform: [{ translateY }] }}
+        style={[styles.cardWrapper, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
         {cardContent}
@@ -72,7 +96,12 @@ export default function CardSwiper({ card, onAnswer, onSkip }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    width: "100%",
+  },
+  cardWrapper: {
+    flex: 1,
+    width: "100%",
+    minHeight: height,
+    alignSelf: "stretch",
   },
 });

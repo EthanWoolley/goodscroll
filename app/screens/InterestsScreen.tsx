@@ -9,8 +9,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../App";
+import type { OnboardingStackParamList } from "../App";
 import { api } from "../api/client";
+import { colors, fontFamily } from "../theme";
 
 const INTEREST_CATEGORIES = [
   "Technology",
@@ -27,7 +28,7 @@ const INTEREST_CATEGORIES = [
   "Mathematics",
 ];
 
-type Props = NativeStackScreenProps<RootStackParamList, "Interests">;
+type Props = NativeStackScreenProps<OnboardingStackParamList, "Interests">;
 
 export default function InterestsScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -92,9 +93,9 @@ export default function InterestsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  safe: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
-  title: { fontSize: 24, fontWeight: "700", color: "#1a1a2e" },
+  title: { fontSize: 24, fontWeight: "700", color: colors.textPrimary, fontFamily },
   scroll: { flex: 1 } as const,
   grid: {
     flexDirection: "row",
@@ -105,24 +106,26 @@ const styles = StyleSheet.create({
   tile: {
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "transparent",
+    borderRadius: 0,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tileSelected: {
-    borderColor: "#8B5CF6",
-    backgroundColor: "#f3f0ff",
+    borderColor: colors.accent,
+    backgroundColor: colors.surfaceRaised,
   },
-  tileText: { fontSize: 14, fontWeight: "500", color: "#64748b" },
-  tileTextSelected: { color: "#8B5CF6" },
+  tileText: { fontSize: 14, fontWeight: "500", color: colors.textSecondary, fontFamily },
+  tileTextSelected: { color: colors.accent },
   footer: { padding: 24, paddingBottom: 32 },
   button: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 0,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { fontSize: 16, fontWeight: 600, color: "#fff" },
+  buttonText: { fontSize: 16, fontWeight: "600", color: colors.background, fontFamily },
 });

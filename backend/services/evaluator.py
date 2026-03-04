@@ -39,13 +39,15 @@ def evaluate_and_generate(
     project_id: str,
     next_round: int,
     api_key: str | None = None,
+    qa_history_override: str | None = None,
 ) -> dict:
-    """Returns {"status": "complete"} or {"status": "continue", "cards": [...]}"""
+    """Returns {"status": "complete"} or {"status": "continue", "cards": [...]}.
+    If qa_history_override is set, it is used instead of building from qa_rows."""
     if api_key and api_key.strip():
         client = anthropic.Anthropic(api_key=api_key.strip())
     else:
         client = anthropic.Anthropic()
-    qa_history = build_qa_history(qa_rows)
+    qa_history = qa_history_override if qa_history_override is not None else build_qa_history(qa_rows)
 
     prompt = EVAL_PROMPT_TEMPLATE.format(
         project_type=project_type,

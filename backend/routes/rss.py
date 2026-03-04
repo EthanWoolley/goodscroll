@@ -26,6 +26,36 @@ def _truncate_summary(text: str, max_len: int = 200) -> str:
     return truncated.strip()
 
 
+def _extract_image_url(entry) -> str | None:
+    """Extract image URL from RSS entry (media_content, media_thumbnail, enclosures, or HTML)."""
+    media_content = getattr(entry, "media_content", None)
+    if media_content and len(media_content) > 0:
+        url = media_content[0].get("url") if isinstance(media_content[0], dict) else getattr(media_content[0], "url", None)
+        if url:
+            return url
+    media_thumbnail = getattr(entry, "media_thumbnail", None)
+    if media_thumbnail and len(media_thumbnail) > 0:
+        url = media_thumbnail[0].get("url") if isinstance(media_thumbnail[0], dict) else getattr(media_thumbnail[0], "url", None)
+        if url:
+            return url
+    enclosures = getattr(entry, "enclosures", None) or []
+    for enc in enclosures:
+        enc_type = enc.get("type", "") if isinstance(enc, dict) else getattr(enc, "type", "") or ""
+        if "image" in enc_type.lower():
+            url = enc.get("href") if isinstance(enc, dict) else getattr(enc, "href", None)
+            if url:
+                return url
+    raw_desc = getattr(entry, "summary", None) or getattr(entry, "description", None) or ""
+    if hasattr(raw_desc, "get"):
+        raw_desc = raw_desc.get("value", str(raw_desc))
+    raw_str = str(raw_desc)
+    if "<img" in raw_str.lower():
+        match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', raw_str, re.I)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
 def _parse_published(entry) -> str:
     published = getattr(entry, "published", None)
     if published:
@@ -88,8 +118,8 @@ def delete_feed(feed_id: str):
     return {"ok": True}
 
 
-@router.get("/cards")
-def get_rss_cards():
+def get_rss_cards_list():
+    """Return list of RSS card dicts (shared for feed assembly)."""
     conn = get_connection()
     rows = conn.execute("SELECT id, url FROM rss_feeds").fetchall()
     conn.close()
@@ -112,6 +142,7 @@ def get_rss_cards():
                 summary = _truncate_summary(str(raw_desc))
                 published_at = _parse_published(entry)
                 entry_id = getattr(entry, "id", None) or str(uuid.uuid4())
+                image_url = _extract_image_url(entry)
                 all_entries.append(
                     {
                         "id": entry_id,
@@ -121,6 +152,7 @@ def get_rss_cards():
                         "summary": summary,
                         "url": link,
                         "published_at": published_at,
+                        "image_url": image_url,
                     }
                 )
         except Exception:
@@ -131,3 +163,8 @@ def get_rss_cards():
         reverse=True,
     )
     return all_entries[:20]
+
+
+@router.get("/cards")
+def get_rss_cards():
+    return get_rss_cards_list()

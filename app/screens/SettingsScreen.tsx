@@ -11,12 +11,13 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../App";
+import type { ProjectsStackParamList } from "../App";
 import { api, type RssFeed } from "../api/client";
+import { colors, fontFamily } from "../theme";
 
 const API_KEY_STORAGE_KEY = "anthropic_api_key";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
+type Props = NativeStackScreenProps<ProjectsStackParamList, "Settings">;
 
 export default function SettingsScreen({ navigation }: Props) {
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -108,7 +109,7 @@ export default function SettingsScreen({ navigation }: Props) {
             placeholder={
               hasStoredKey ? "Key saved (enter new to replace)" : "Enter your Anthropic API key"
             }
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.textSecondary}
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
@@ -137,7 +138,7 @@ export default function SettingsScreen({ navigation }: Props) {
               value={rssUrlInput}
               onChangeText={setRssUrlInput}
               placeholder="Feed URL"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={colors.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -175,7 +176,7 @@ export default function SettingsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -184,71 +185,78 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 16,
   },
-  backText: { fontSize: 16, color: "#8B5CF6", fontWeight: 500 },
-  title: { fontSize: 24, fontWeight: "700", color: "#1a1a2e" },
+  backText: { fontSize: 16, color: colors.textPrimary, fontWeight: "500", fontFamily },
+  title: { fontSize: 24, fontWeight: "700", color: colors.textPrimary, fontFamily },
   scroll: { flex: 1 },
   content: { padding: 24, paddingBottom: 48 },
   section: { marginBottom: 32 },
   sectionTitle: {
     fontSize: 17,
     fontWeight: "600",
-    color: "#1a1a2e",
+    color: colors.textPrimary,
     marginBottom: 12,
+    fontFamily,
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
+    borderColor: colors.border,
+    borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#1a1a2e",
+    color: colors.textPrimary,
+    fontFamily,
   },
   urlInput: { flex: 1 },
   buttonRow: { flexDirection: "row", gap: 12, marginTop: 12 },
   primaryButton: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  primaryButtonText: { fontSize: 15, fontWeight: 600, color: "#fff" },
+  primaryButtonText: { fontSize: 15, fontWeight: "600", color: colors.background, fontFamily },
   secondaryButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: colors.border,
   },
-  secondaryButtonText: { fontSize: 15, fontWeight: 500, color: "#64748b" },
+  secondaryButtonText: { fontSize: 15, fontWeight: "500", color: colors.textPrimary, fontFamily },
   note: {
     marginTop: 12,
     fontSize: 13,
-    color: "#64748b",
+    color: colors.textSecondary,
     lineHeight: 18,
+    fontFamily,
   },
   addRow: { flexDirection: "row", gap: 12, alignItems: "center", marginBottom: 12 },
   addButton: {
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  addButtonText: { fontSize: 14, fontWeight: 600, color: "#fff" },
+  addButtonText: { fontSize: 14, fontWeight: "600", color: colors.background, fontFamily },
   feedRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 0,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: colors.border,
   },
-  feedUrl: { flex: 1, fontSize: 14, color: "#64748b", marginRight: 12 },
-  deleteText: { fontSize: 14, color: "#dc2626", fontWeight: 500 },
-  muted: { fontSize: 14, color: "#94a3b8", marginTop: 4 },
+  feedUrl: { flex: 1, fontSize: 14, color: colors.textSecondary, marginRight: 12, fontFamily },
+  deleteText: { fontSize: 14, color: colors.destructive, fontWeight: "500", fontFamily },
+  muted: { fontSize: 14, color: colors.textSecondary, marginTop: 4, fontFamily },
 });

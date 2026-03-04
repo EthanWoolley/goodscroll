@@ -1,10 +1,11 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, fontFamily } from "../theme";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../App";
+import type { OnboardingStackParamList } from "../App";
 
-type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
+type Props = NativeStackScreenProps<OnboardingStackParamList, "Welcome">;
 
 export default function WelcomeScreen({ navigation }: Props) {
   return (
@@ -27,25 +28,28 @@ export default function WelcomeScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f8fafc" },
+  safe: { flex: 1, backgroundColor: colors.background },
   content: {
     flex: 1,
     paddingHorizontal: 24,
     justifyContent: "center",
   },
-  title: { fontSize: 32, fontWeight: "800", color: "#1a1a2e" },
+  title: { fontSize: 32, fontWeight: "800", color: colors.textPrimary, fontFamily },
   description: {
     marginTop: 16,
     fontSize: 16,
-    color: "#64748b",
+    color: colors.textSecondary,
     lineHeight: 24,
+    fontFamily,
   },
   button: {
     marginTop: 40,
-    backgroundColor: "#8B5CF6",
+    backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 0,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  buttonText: { fontSize: 16, fontWeight: 600, color: "#fff" },
+  buttonText: { fontSize: 16, fontWeight: "600", color: colors.background, fontFamily },
 });
