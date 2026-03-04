@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+export const fontFamily = "NectoMono-Regular";
 
 export const colors = {
   background: "#0a0a0a",
@@ -10,6 +10,3 @@ export const colors = {
   accent: "#ffffff",
   destructive: "#cc3333",
 } as const;
-
-export const fontFamily =
-  Platform.OS === "ios" ? "Courier New" : "monospace";

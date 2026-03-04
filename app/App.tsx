@@ -5,6 +5,7 @@ import {
   StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFonts } from "expo-font";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -106,6 +107,10 @@ function MainTabs() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    "NectoMono-Regular": require("./assets/NectoMono-Regular.otf"),
+  });
+
   const [ready, setReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(true);
 
@@ -116,7 +121,7 @@ export default function App() {
     });
   }, []);
 
-  if (!ready) {
+  if (!ready || !fontsLoaded) {
     return (
       <SafeAreaProvider>
         <View style={styles.loading}>

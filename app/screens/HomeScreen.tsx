@@ -30,7 +30,7 @@ export default function HomeScreen({ navigation }: Props) {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.title}>Scroll</Text>
+            <Text style={styles.title}>goodscroll</Text>
             <Text style={styles.subtitle}>Your projects</Text>
           </View>
           <TouchableOpacity
