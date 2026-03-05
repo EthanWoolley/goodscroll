@@ -46,6 +46,9 @@ export default function FeedScreen({ route, navigation }: Props) {
   }, [cards]);
 
   const currentCard: FeedCard | undefined = localCards[currentIndex];
+  const previousCard: FeedCard | undefined = currentIndex > 0 ? localCards[currentIndex - 1] : undefined;
+  const nextCard: FeedCard | undefined =
+    currentIndex < localCards.length - 1 ? localCards[currentIndex + 1] : undefined;
   const isLastCard = currentIndex >= localCards.length - 1;
 
   const handleAnswer = useCallback(
@@ -187,6 +190,8 @@ export default function FeedScreen({ route, navigation }: Props) {
         <CardSwiper
           key={currentCard.id}
           card={currentCard}
+          previousCard={previousCard}
+          nextCard={nextCard}
           onSwipeUp={handleSwipeUp}
           onSwipeDown={handleGoBack}
           onAnswer={handleAnswer}

@@ -5,6 +5,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Easing,
 } from "react-native";
 import { type FeedCard, isRssCard } from "../api/client";
 import type { WikipediaCardData } from "./WikipediaCard";
@@ -14,7 +15,11 @@ import RSSCard from "./RSSCard";
 import WikipediaCard from "./WikipediaCard";
 
 const { height } = Dimensions.get("window");
-const SWIPE_THRESHOLD = 80;
+const PAN_START_THRESHOLD = 6;
+const DRAG_DISMISS_PERCENT = 0.27;
+const MAX_DRAG_PERCENT = 0.9;
+const SWIPE_VELOCITY_THRESHOLD = 0.65;
+const OFFSCREEN_SNAP_DURATION = 180;
 
 export type SwipeableCard = FeedCard | (WikipediaCardData & { type?: "wikipedia" });
 
@@ -24,6 +29,8 @@ function isWikipediaCard(card: SwipeableCard): card is WikipediaCardData {
 
 interface Props {
   card: SwipeableCard;
+  previousCard?: SwipeableCard | null;
+  nextCard?: SwipeableCard | null;
   onSwipeUp: () => void;
   onSwipeDown: () => void;
   onAnswer: (answer: string) => void;
@@ -31,63 +38,115 @@ interface Props {
   projectTitle?: string;
 }
 
-export default function CardSwiper({ card, onSwipeUp, onSwipeDown, onAnswer, onSkip, projectTitle }: Props) {
+export default function CardSwiper({
+  card,
+  previousCard,
+  nextCard,
+  onSwipeUp,
+  onSwipeDown,
+  onAnswer,
+  onSkip,
+  projectTitle,
+}: Props) {
   const translateY = useRef(new Animated.Value(0)).current;
+  const distanceThreshold = height * DRAG_DISMISS_PERCENT;
+  const maxDragDistance = height * MAX_DRAG_PERCENT;
+  const previousCardTranslateY = translateY.interpolate({
+    inputRange: [-height, 0, height],
+    outputRange: [-2 * height, -height, 0],
+    extrapolate: "clamp",
+  });
+  const nextCardTranslateY = translateY.interpolate({
+    inputRange: [-height, 0, height],
+    outputRange: [0, height, 2 * height],
+    extrapolate: "clamp",
+  });
+
+  const animateToCardCenter = () => {
+    Animated.spring(translateY, {
+      toValue: 0,
+      stiffness: 340,
+      damping: 28,
+      mass: 0.9,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 10,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > PAN_START_THRESHOLD,
       onPanResponderMove: (_, gs) => {
-        translateY.setValue(gs.dy);
+        const clampedDrag = Math.max(-maxDragDistance, Math.min(maxDragDistance, gs.dy));
+        translateY.setValue(clampedDrag);
       },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy < -SWIPE_THRESHOLD) {
+        const shouldSwipeUp =
+          gs.dy <= -distanceThreshold || (gs.vy <= -SWIPE_VELOCITY_THRESHOLD && gs.dy < 0);
+        const shouldSwipeDown =
+          gs.dy >= distanceThreshold || (gs.vy >= SWIPE_VELOCITY_THRESHOLD && gs.dy > 0);
+
+        if (shouldSwipeUp) {
           Animated.timing(translateY, {
             toValue: -height,
-            duration: 250,
+            duration: OFFSCREEN_SNAP_DURATION,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }).start(() => {
-            translateY.setValue(0);
             onSwipeUp();
           });
           return;
         }
-        if (gs.dy > SWIPE_THRESHOLD) {
+        if (shouldSwipeDown) {
           Animated.timing(translateY, {
             toValue: height,
-            duration: 250,
+            duration: OFFSCREEN_SNAP_DURATION,
+            easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }).start(() => {
-            translateY.setValue(0);
             onSwipeDown();
           });
           return;
         }
-        Animated.spring(translateY, {
-          toValue: 0,
-          useNativeDriver: true,
-        }).start();
+        animateToCardCenter();
       },
+      onPanResponderTerminate: animateToCardCenter,
     })
   ).current;
 
-  const cardContent = isWikipediaCard(card) ? (
-    <WikipediaCard card={card} onSkip={onSkip} />
-  ) : isRssCard(card) ? (
-    <RSSCard card={card} onSkip={onSkip} />
-  ) : card.type === "multiple_choice" ? (
-    <MultipleChoiceCard card={card} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
-  ) : (
-    <OpenEndedCard card={card} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
-  );
+  const renderCardContent = (cardToRender: SwipeableCard) =>
+    isWikipediaCard(cardToRender) ? (
+      <WikipediaCard card={cardToRender} onSkip={onSkip} />
+    ) : isRssCard(cardToRender) ? (
+      <RSSCard card={cardToRender} onSkip={onSkip} />
+    ) : cardToRender.type === "multiple_choice" ? (
+      <MultipleChoiceCard card={cardToRender} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
+    ) : (
+      <OpenEndedCard card={cardToRender} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
+    );
 
   return (
     <View style={styles.container}>
+      {previousCard ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.adjacentCardWrapper, { transform: [{ translateY: previousCardTranslateY }] }]}
+        >
+          {renderCardContent(previousCard)}
+        </Animated.View>
+      ) : null}
+      {nextCard ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.adjacentCardWrapper, { transform: [{ translateY: nextCardTranslateY }] }]}
+        >
+          {renderCardContent(nextCard)}
+        </Animated.View>
+      ) : null}
       <Animated.View
-        style={[styles.cardWrapper, { transform: [{ translateY }] }]}
+        style={[styles.currentCardWrapper, { transform: [{ translateY }] }]}
         {...panResponder.panHandlers}
       >
-        {cardContent}
+        {renderCardContent(card)}
       </Animated.View>
     </View>
   );
@@ -97,9 +156,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: "100%",
+    overflow: "hidden",
   },
-  cardWrapper: {
-    flex: 1,
+  adjacentCardWrapper: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    minHeight: height,
+    alignSelf: "stretch",
+  },
+  currentCardWrapper: {
+    ...StyleSheet.absoluteFillObject,
     width: "100%",
     minHeight: height,
     alignSelf: "stretch",

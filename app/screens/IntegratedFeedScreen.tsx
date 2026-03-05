@@ -86,6 +86,12 @@ export default function IntegratedFeedScreen() {
 
   const currentItem = cards[currentIndex];
   const currentCard = currentItem ? feedItemToSwipeableCard(currentItem) : null;
+  const previousCard =
+    currentIndex > 0 && cards[currentIndex - 1] ? feedItemToSwipeableCard(cards[currentIndex - 1]) : null;
+  const nextCard =
+    currentIndex < cards.length - 1 && cards[currentIndex + 1]
+      ? feedItemToSwipeableCard(cards[currentIndex + 1])
+      : null;
 
   const advance = useCallback(() => {
     setCurrentIndex((i) => Math.min(i + 1, cards.length));
@@ -209,6 +215,8 @@ export default function IntegratedFeedScreen() {
         <CardSwiper
           key={currentCard.id}
           card={currentCard}
+          previousCard={previousCard}
+          nextCard={nextCard}
           onSwipeUp={handleSwipeUp}
           onSwipeDown={handleGoBack}
           onAnswer={handleAnswer}
