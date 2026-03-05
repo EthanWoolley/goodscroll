@@ -1,4 +1,6 @@
-const BASE_URL = "http://127.0.0.1:8000";
+// Use EXPO_PUBLIC_API_URL for physical device (set to your Mac's LAN IP, e.g. http://192.168.1.x:8000)
+// 127.0.0.1 works for web/simulator; on device it points to the phone, not your computer
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export interface RequestOptions extends RequestInit {
   anthropicKey?: string;
