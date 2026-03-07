@@ -9,10 +9,12 @@ import {
 } from "react-native";
 import { type FeedCard, isRssCard } from "../api/client";
 import type { WikipediaCardData } from "./WikipediaCard";
+import type { WikipediaInterestCardData } from "./WikipediaInterestCard";
 import MultipleChoiceCard from "./MultipleChoiceCard";
 import OpenEndedCard from "./OpenEndedCard";
 import RSSCard from "./RSSCard";
 import WikipediaCard from "./WikipediaCard";
+import WikipediaInterestCard from "./WikipediaInterestCard";
 
 const { height } = Dimensions.get("window");
 const PAN_START_THRESHOLD = 6;
@@ -21,7 +23,14 @@ const MAX_DRAG_PERCENT = 0.9;
 const SWIPE_VELOCITY_THRESHOLD = 0.65;
 const OFFSCREEN_SNAP_DURATION = 180;
 
-export type SwipeableCard = FeedCard | (WikipediaCardData & { type?: "wikipedia" });
+export type SwipeableCard =
+  | FeedCard
+  | (WikipediaCardData & { type?: "wikipedia" })
+  | (WikipediaInterestCardData & { type: "wikipedia_interest_question" });
+
+function isWikiInterestCard(card: SwipeableCard): card is WikipediaInterestCardData & { type: "wikipedia_interest_question" } {
+  return "type" in card && card.type === "wikipedia_interest_question" && "wiki_interest_card_id" in card;
+}
 
 function isWikipediaCard(card: SwipeableCard): card is WikipediaCardData {
   return "source_term" in card && "extract" in card && !("question" in card);
@@ -34,6 +43,7 @@ interface Props {
   onSwipeUp: () => void;
   onSwipeDown: () => void;
   onAnswer: (answer: string) => void;
+  onMultiAnswer?: (selected: string[]) => void;
   onSkip: () => void;
   projectTitle?: string;
 }
@@ -45,6 +55,7 @@ export default function CardSwiper({
   onSwipeUp,
   onSwipeDown,
   onAnswer,
+  onMultiAnswer,
   onSkip,
   projectTitle,
 }: Props) {
@@ -114,7 +125,13 @@ export default function CardSwiper({
   ).current;
 
   const renderCardContent = (cardToRender: SwipeableCard) =>
-    isWikipediaCard(cardToRender) ? (
+    isWikiInterestCard(cardToRender) ? (
+      <WikipediaInterestCard
+        card={cardToRender}
+        onAnswer={(sel) => onMultiAnswer?.(sel)}
+        onSkip={onSkip}
+      />
+    ) : isWikipediaCard(cardToRender) ? (
       <WikipediaCard card={cardToRender} onSkip={onSkip} />
     ) : isRssCard(cardToRender) ? (
       <RSSCard card={cardToRender} onSkip={onSkip} />

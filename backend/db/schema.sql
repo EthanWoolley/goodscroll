@@ -62,3 +62,27 @@ CREATE TABLE IF NOT EXISTS project_context_overrides (
   updated_at TEXT NOT NULL,
   FOREIGN KEY (project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS wiki_interest_cards (
+  id TEXT PRIMARY KEY,
+  parent_category TEXT NOT NULL,
+  options TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'unanswered',
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS wiki_interest_answers (
+  id TEXT PRIMARY KEY,
+  card_id TEXT NOT NULL,
+  selected_options TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (card_id) REFERENCES wiki_interest_cards(id)
+);
+
+CREATE TABLE IF NOT EXISTS wiki_category_reads (
+  user_id TEXT NOT NULL DEFAULT 'default_user',
+  category_title TEXT NOT NULL,
+  read_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, category_title)
+);

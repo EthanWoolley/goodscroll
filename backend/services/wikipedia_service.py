@@ -43,7 +43,7 @@ def fetch_wikipedia_summary(term: str) -> dict | None:
     url = WIKI_SUMMARY_URL.format(encoded)
     try:
         req = Request(url, headers={"User-Agent": "ScrollApp/1.0"})
-        with urlopen(req, timeout=5) as resp:
+        with urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode())
     except Exception:
         return None

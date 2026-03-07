@@ -19,10 +19,21 @@ import {
   isQuestionFeedItem,
   isRssFeedItem,
   isWikipediaFeedItem,
+  isWikiInterestQuestionItem,
 } from "../api/client";
 import { colors, fontFamily } from "../theme";
 
 function feedItemToSwipeableCard(item: FeedItem): SwipeableCard {
+  if (item.source === "wikipedia_interest_question" && item.wiki_interest_card_id && item.options) {
+    return {
+      id: item.id,
+      type: "wikipedia_interest_question" as const,
+      wiki_interest_card_id: item.wiki_interest_card_id,
+      question: item.question ?? "Which of these topics interest you most?",
+      options: item.options.filter((o): o is string => o != null),
+      parent_category: item.parent_category,
+    };
+  }
   if (item.source === "question" && item.project_id && item.type && item.question != null) {
     return {
       id: item.id,
@@ -144,8 +155,33 @@ export default function IntegratedFeedScreen() {
     [currentItem, currentCard, removeAndAdvance]
   );
 
+  const handleMultiAnswer = useCallback(
+    async (selected: string[]) => {
+      if (!currentItem || !currentCard) return;
+      if (isWikiInterestQuestionItem(currentItem) && currentItem.wiki_interest_card_id) {
+        setSubmitting(true);
+        try {
+          await api.submitWikiInterestAnswer(currentItem.wiki_interest_card_id, selected);
+          removeAndAdvance();
+        } catch (e: any) {
+          Alert.alert("Error", e.message || "Failed to submit");
+        } finally {
+          setSubmitting(false);
+        }
+      }
+    },
+    [currentItem, currentCard, removeAndAdvance]
+  );
+
   const handleSkip = useCallback(async () => {
     if (!currentItem || !currentCard) return;
+    if (isWikiInterestQuestionItem(currentItem) && currentItem.wiki_interest_card_id) {
+      try {
+        await api.skipWikiInterestCard(currentItem.wiki_interest_card_id);
+      } catch {}
+      removeAndAdvance();
+      return;
+    }
     if (isQuestionFeedItem(currentItem) && currentItem.project_id) {
       try {
         await api.skipCard(currentItem.project_id, currentItem.id);
@@ -164,7 +200,7 @@ export default function IntegratedFeedScreen() {
 
   const handleSwipeUp = useCallback(() => {
     if (!currentItem || !currentCard) return;
-    if (isQuestionFeedItem(currentItem)) {
+    if (isQuestionFeedItem(currentItem) || isWikiInterestQuestionItem(currentItem)) {
       handleSkip();
     } else {
       handleAnswer("");
@@ -220,6 +256,7 @@ export default function IntegratedFeedScreen() {
           onSwipeUp={handleSwipeUp}
           onSwipeDown={handleGoBack}
           onAnswer={handleAnswer}
+          onMultiAnswer={handleMultiAnswer}
           onSkip={handleSkip}
           projectTitle={currentItem && isQuestionFeedItem(currentItem) ? currentItem.project_title : undefined}
         />

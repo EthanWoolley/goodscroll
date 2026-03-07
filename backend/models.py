@@ -76,11 +76,15 @@ class WikipediaCardOut(BaseModel):
     thumbnail_url: str | None = None
 
 
+class WikiInterestAnswerSubmit(BaseModel):
+    selected_options: list[str]
+
+
 class FeedItemOut(BaseModel):
     """Unified feed item; source discriminates shape."""
-    source: str  # "question" | "rss" | "wikipedia"
+    source: str  # "question" | "rss" | "wikipedia" | "wikipedia_interest_question"
     id: str
-    # question card
+    # question card (project) fields
     project_id: str | None = None
     project_title: str | None = None
     type: str | None = None  # multiple_choice | open_ended
@@ -94,9 +98,12 @@ class FeedItemOut(BaseModel):
     summary: str | None = None
     url: str | None = None
     published_at: str | None = None
-    feed_source: str | None = None  # feed title for rss
+    feed_source: str | None = None
     image_url: str | None = None
-    # wikipedia
+    # wikipedia article
     extract: str | None = None
     source_term: str | None = None
     thumbnail_url: str | None = None
+    # wikipedia interest question
+    wiki_interest_card_id: str | None = None
+    parent_category: str | None = None

@@ -82,7 +82,7 @@ export function isRssCard(card: FeedCard): card is RssCard {
 
 /** Unified feed item from GET /feed */
 export interface FeedItem {
-  source: "question" | "rss" | "wikipedia";
+  source: "question" | "rss" | "wikipedia" | "wikipedia_interest_question";
   id: string;
   project_id?: string;
   project_title?: string;
@@ -101,6 +101,8 @@ export interface FeedItem {
   source_term?: string;
   image_url?: string;
   thumbnail_url?: string;
+  wiki_interest_card_id?: string;
+  parent_category?: string;
 }
 
 export function isQuestionFeedItem(item: FeedItem): item is FeedItem & { source: "question"; project_id: string } {
@@ -113,6 +115,12 @@ export function isRssFeedItem(item: FeedItem): item is FeedItem & { source: "rss
 
 export function isWikipediaFeedItem(item: FeedItem): item is FeedItem & { source: "wikipedia" } {
   return item.source === "wikipedia";
+}
+
+export function isWikiInterestQuestionItem(
+  item: FeedItem
+): item is FeedItem & { source: "wikipedia_interest_question"; wiki_interest_card_id: string } {
+  return item.source === "wikipedia_interest_question" && item.wiki_interest_card_id != null;
 }
 
 export const api = {
@@ -188,4 +196,15 @@ export const api = {
 
   deleteProjectContextOverride: (projectId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/context/override`, { method: "DELETE" }),
+
+  submitWikiInterestAnswer: (cardId: string, selectedOptions: string[]) =>
+    request<{ ok: boolean }>(`/wikipedia/interest-questions/${cardId}/answer`, {
+      method: "POST",
+      body: JSON.stringify({ selected_options: selectedOptions }),
+    }),
+
+  skipWikiInterestCard: (cardId: string) =>
+    request<{ ok: boolean }>(`/wikipedia/interest-questions/${cardId}/skip`, {
+      method: "PATCH",
+    }),
 };
