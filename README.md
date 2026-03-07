@@ -4,6 +4,18 @@ AI-powered project assistant that generates targeted question cards to extract c
 
 ## Quick Start
 
+### PostgreSQL
+
+Start a local PostgreSQL instance (Docker recommended):
+
+```bash
+docker run --name scrollapp-db \
+  -e POSTGRES_PASSWORD=password \
+  -e POSTGRES_DB=scrollapp \
+  -p 5432:5432 \
+  -d postgres:15
+```
+
 ### Backend
 
 ```bash
@@ -12,8 +24,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
 
-# Set your Anthropic API key
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
+# Configure environment
+cat > .env << 'EOF'
+ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/scrollapp
+EOF
+
+# Run database migrations
+alembic upgrade head
+
+# (Optional) Seed from an existing SQLite database
+python scripts/seed_from_sqlite.py          # defaults to backend/scroll.db
+# python scripts/seed_from_sqlite.py /path/to/scroll.db
 
 # Run the server
 uvicorn backend.main:app --reload
@@ -36,7 +58,7 @@ If testing on a physical device, update the `BASE_URL` in `app/api/client.ts` to
 ## Architecture
 
 - **Frontend:** React Native + Expo (TypeScript), Zustand for state, React Navigation
-- **Backend:** Python, FastAPI, SQLite
+- **Backend:** Python, FastAPI, PostgreSQL, SQLAlchemy (async), Alembic
 - **AI:** Anthropic Claude claude-sonnet-4-6 for question generation and completeness evaluation
 
 ## Core Loop

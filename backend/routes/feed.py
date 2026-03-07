@@ -1,9 +1,11 @@
 """Integrated feed: question cards (all projects) + Wikipedia articles + RSS + wiki interest questions."""
-import json
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.database import get_connection
+from backend.db.models import Answer, Card, Project
+from backend.db.session import get_db
 from backend.models import FeedItemOut
 from backend.routes.rss import get_rss_cards_list
 from backend.routes.wikipedia import (
@@ -15,69 +17,65 @@ router = APIRouter(tags=["feed"])
 FEED_LIMIT = 60
 SKIPPED_CAP = 10
 WIKI_QUESTION_SPACING = 4
-# Feature flag: when True, skip Wikipedia work in the feed (for perf/debug); default False so wiki is enabled
 SKIP_WIKI_IN_FEED = False
 
 
-def _row_to_feed_item(row, project_title: str) -> FeedItemOut:
+def _row_to_feed_item(card: Card, project_title: str) -> FeedItemOut:
     return FeedItemOut(
         source="question",
-        id=row["id"],
-        project_id=row["project_id"],
+        id=str(card.id),
+        project_id=str(card.project_id),
         project_title=project_title,
-        type=row["type"],
-        question=row["question"],
-        options=json.loads(row["options"]) if row["options"] else None,
-        status=row["status"],
-        round=row["round"],
-        created_at=row["created_at"],
+        type=card.type,
+        question=card.question,
+        options=list(card.options) if card.options else None,
+        status=card.status,
+        round=card.round,
+        created_at=card.created_at.isoformat(),
     )
 
 
 @router.get("/feed", response_model=list[FeedItemOut])
-def get_feed(request: Request):
+async def get_feed(request: Request, db: AsyncSession = Depends(get_db)):
     api_key = (request.headers.get("X-Anthropic-Key") or "").strip() or None
-    conn = get_connection()
 
     # 1. Skipped project question cards, oldest first
-    skipped_rows = conn.execute(
-        """SELECT c.id, c.project_id, c.type, c.question, c.options, c.status, c.round, c.created_at, p.title as project_title
-           FROM cards c
-           JOIN projects p ON c.project_id = p.id
-           WHERE c.status = 'skipped'
-           ORDER BY c.created_at ASC
-           LIMIT ?""",
-        (SKIPPED_CAP,),
-    ).fetchall()
-    skipped_cards = [_row_to_feed_item(r, r["project_title"]) for r in skipped_rows]
+    skipped_result = await db.execute(
+        select(Card, Project.title.label("project_title"))
+        .join(Project, Card.project_id == Project.id)
+        .where(Card.status == "skipped")
+        .order_by(Card.created_at.asc())
+        .limit(SKIPPED_CAP)
+    )
+    skipped_rows = skipped_result.all()
+    skipped_cards = [_row_to_feed_item(r.Card, r.project_title) for r in skipped_rows]
 
     # 2. Unanswered project question cards: round-robin by least-recently-answered project
-    project_last_answer = conn.execute(
-        """SELECT project_id, MAX(a.created_at) as last_at
-           FROM answers a
-           GROUP BY project_id"""
-    ).fetchall()
-    last_by_project = {r["project_id"]: r["last_at"] for r in project_last_answer}
+    last_answer_result = await db.execute(
+        select(Answer.project_id, func.max(Answer.created_at).label("last_at"))
+        .group_by(Answer.project_id)
+    )
+    last_by_project = {str(r.project_id): r.last_at for r in last_answer_result.all()}
 
-    projects_with_cards = conn.execute(
-        "SELECT DISTINCT project_id FROM cards WHERE status = 'unanswered'"
-    ).fetchall()
-    project_ids = [r["project_id"] for r in projects_with_cards]
-    project_ids.sort(key=lambda pid: (last_by_project.get(pid) or "", pid))
+    projects_result = await db.execute(
+        select(Card.project_id).where(Card.status == "unanswered").distinct()
+    )
+    project_ids = [str(r.project_id) for r in projects_result.all()]
+    project_ids.sort(key=lambda pid: (str(last_by_project.get(pid) or ""), pid))
 
     unanswered_cards: list[FeedItemOut] = []
-    indices = {pid: 0 for pid in project_ids}
-    card_rows_by_project = {}
+    indices: dict[str, int] = {pid: 0 for pid in project_ids}
+    card_rows_by_project: dict[str, list] = {}
     for pid in project_ids:
-        rows = conn.execute(
-            """SELECT c.id, c.project_id, c.type, c.question, c.options, c.status, c.round, c.created_at, p.title as project_title
-               FROM cards c
-               JOIN projects p ON c.project_id = p.id
-               WHERE c.project_id = ? AND c.status = 'unanswered'
-               ORDER BY c.created_at""",
-            (pid,),
-        ).fetchall()
-        card_rows_by_project[pid] = rows
+        from uuid import UUID
+        pid_uuid = UUID(pid)
+        result = await db.execute(
+            select(Card, Project.title.label("project_title"))
+            .join(Project, Card.project_id == Project.id)
+            .where(Card.project_id == pid_uuid, Card.status == "unanswered")
+            .order_by(Card.created_at)
+        )
+        card_rows_by_project[pid] = result.all()
 
     remaining = sum(len(card_rows_by_project[pid]) for pid in project_ids)
     while remaining > 0 and len(skipped_cards) + len(unanswered_cards) < FEED_LIMIT:
@@ -87,7 +85,7 @@ def get_feed(request: Request):
             if i >= len(rows):
                 continue
             r = rows[i]
-            unanswered_cards.append(_row_to_feed_item(r, r["project_title"]))
+            unanswered_cards.append(_row_to_feed_item(r.Card, r.project_title))
             indices[pid] = i + 1
             remaining -= 1
             if len(skipped_cards) + len(unanswered_cards) >= FEED_LIMIT:
@@ -97,12 +95,11 @@ def get_feed(request: Request):
 
     question_cards = skipped_cards + unanswered_cards
 
-    # 3. Wiki interest question cards (skipped when SKIP_WIKI_IN_FEED is True)
+    # 3. Wiki interest question cards
     if SKIP_WIKI_IN_FEED:
-        pending_questions = []
+        pending_questions: list[dict] = []
     else:
-        pending_questions = ensure_wiki_interest_questions(conn)
-    conn.close()
+        pending_questions = await ensure_wiki_interest_questions(db)
 
     wiki_question_items: list[FeedItemOut] = []
     for q in pending_questions:
@@ -117,11 +114,11 @@ def get_feed(request: Request):
             )
         )
 
-    # 4. Wikipedia article cards (skipped when SKIP_WIKI_IN_FEED is True)
+    # 4. Wikipedia article cards
     if SKIP_WIKI_IN_FEED:
         wiki_cards = []
     else:
-        wiki_cards = get_wikipedia_cards_for_feed(api_key)
+        wiki_cards = await get_wikipedia_cards_for_feed(db, api_key)
     wiki_items = [
         FeedItemOut(
             source="wikipedia",
@@ -136,7 +133,7 @@ def get_feed(request: Request):
     ]
 
     # 5. RSS
-    rss_cards = get_rss_cards_list()
+    rss_cards = await get_rss_cards_list(db)
     rss_items = [
         FeedItemOut(
             source="rss",
@@ -152,12 +149,7 @@ def get_feed(request: Request):
     ]
 
     # 6. Interleave
-    # Rules:
-    #   - Wiki interest question: at most once every WIKI_QUESTION_SPACING cards
-    #   - RSS: every 5th position
-    #   - Wiki articles: every 3rd non-question position
-    #   - No cap on total feed size (raised to FEED_LIMIT=60)
-    result: list[FeedItemOut] = []
+    result_feed: list[FeedItemOut] = []
     q_idx = 0
     w_idx = 0
     r_idx = 0
@@ -165,45 +157,38 @@ def get_feed(request: Request):
     cards_since_wiki_question = WIKI_QUESTION_SPACING
     cards_since_wiki_article = 0
 
-    while len(result) < FEED_LIMIT:
-        # RSS every 5th slot
-        if len(result) % 5 == 4 and r_idx < len(rss_items):
-            result.append(rss_items[r_idx])
+    while len(result_feed) < FEED_LIMIT:
+        if len(result_feed) % 5 == 4 and r_idx < len(rss_items):
+            result_feed.append(rss_items[r_idx])
             r_idx += 1
             cards_since_wiki_question += 1
             cards_since_wiki_article += 1
-        # Wiki interest question if spacing allows
         elif cards_since_wiki_question >= WIKI_QUESTION_SPACING and wq_idx < len(wiki_question_items):
-            result.append(wiki_question_items[wq_idx])
+            result_feed.append(wiki_question_items[wq_idx])
             wq_idx += 1
             cards_since_wiki_question = 0
             cards_since_wiki_article += 1
-        # Wiki article every ~3 question cards
         elif cards_since_wiki_article >= 3 and w_idx < len(wiki_items):
-            result.append(wiki_items[w_idx])
+            result_feed.append(wiki_items[w_idx])
             w_idx += 1
             cards_since_wiki_article = 0
             cards_since_wiki_question += 1
-        # Project question card
         elif q_idx < len(question_cards):
-            result.append(question_cards[q_idx])
+            result_feed.append(question_cards[q_idx])
             q_idx += 1
             cards_since_wiki_question += 1
             cards_since_wiki_article += 1
-        # Drain remaining wiki articles
         elif w_idx < len(wiki_items):
-            result.append(wiki_items[w_idx])
+            result_feed.append(wiki_items[w_idx])
             w_idx += 1
             cards_since_wiki_question += 1
-        # Drain remaining wiki questions
         elif wq_idx < len(wiki_question_items):
-            result.append(wiki_question_items[wq_idx])
+            result_feed.append(wiki_question_items[wq_idx])
             wq_idx += 1
-        # Drain remaining RSS
         elif r_idx < len(rss_items):
-            result.append(rss_items[r_idx])
+            result_feed.append(rss_items[r_idx])
             r_idx += 1
         else:
             break
 
-    return result[:FEED_LIMIT]
+    return result_feed[:FEED_LIMIT]

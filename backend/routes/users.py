@@ -1,9 +1,11 @@
-import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.database import get_connection
+from backend.db.models import UserInterest
+from backend.db.session import get_db
 from backend.models import InterestsSubmit
 from backend.services.wikipedia_category_service import INTEREST_TO_CATEGORY
 
@@ -13,34 +15,35 @@ DEFAULT_USER_ID = "default_user"
 
 
 @router.post("/interests")
-def post_interests(body: InterestsSubmit):
+async def post_interests(body: InterestsSubmit, db: AsyncSession = Depends(get_db)):
     categories = [
         INTEREST_TO_CATEGORY.get(label, f"Category:{label}")
         for label in body.interests
     ]
-    now = datetime.now(timezone.utc).isoformat()
-    conn = get_connection()
-    conn.execute(
-        """INSERT INTO user_interests (id, interests, updated_at)
-           VALUES (?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET interests = excluded.interests, updated_at = excluded.updated_at""",
-        (DEFAULT_USER_ID, json.dumps(categories), now),
+    now = datetime.now(timezone.utc)
+
+    result = await db.execute(
+        select(UserInterest).where(UserInterest.id == DEFAULT_USER_ID)
     )
-    conn.commit()
-    conn.close()
+    existing = result.scalar_one_or_none()
+    if existing:
+        await db.execute(
+            update(UserInterest)
+            .where(UserInterest.id == DEFAULT_USER_ID)
+            .values(interests=categories, updated_at=now)
+        )
+    else:
+        db.add(UserInterest(id=DEFAULT_USER_ID, interests=categories, updated_at=now))
+    await db.commit()
     return {"ok": True}
 
 
 @router.get("/interests")
-def get_interests():
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT interests FROM user_interests WHERE id = ?", (DEFAULT_USER_ID,)
-    ).fetchone()
-    conn.close()
-    if not row:
+async def get_interests(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(UserInterest.interests).where(UserInterest.id == DEFAULT_USER_ID)
+    )
+    interests = result.scalar_one_or_none()
+    if not interests:
         return []
-    try:
-        return json.loads(row["interests"])
-    except (json.JSONDecodeError, TypeError):
-        return []
+    return interests

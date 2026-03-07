@@ -1,13 +1,16 @@
 import re
-import sqlite3
 import time
 import uuid
 from datetime import datetime, timezone
 
 import feedparser
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.database import get_connection
+from backend.db.models import RssFeed
+from backend.db.session import get_db
 from backend.models import RssFeedAdd
 
 router = APIRouter(prefix="/rss", tags=["rss"])
@@ -27,7 +30,6 @@ def _truncate_summary(text: str, max_len: int = 200) -> str:
 
 
 def _extract_image_url(entry) -> str | None:
-    """Extract image URL from RSS entry (media_content, media_thumbnail, enclosures, or HTML)."""
     media_content = getattr(entry, "media_content", None)
     if media_content and len(media_content) > 0:
         url = media_content[0].get("url") if isinstance(media_content[0], dict) else getattr(media_content[0], "url", None)
@@ -71,63 +73,57 @@ def _parse_published(entry) -> str:
 
 
 @router.post("/feeds")
-def add_feed(body: RssFeedAdd):
+async def add_feed(body: RssFeedAdd, db: AsyncSession = Depends(get_db)):
     url = (body.url or "").strip()
     if not url:
         raise HTTPException(status_code=400, detail="url is required")
-    feed_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    conn = get_connection()
+
+    feed_id = uuid.uuid4()
+    now = datetime.now(timezone.utc)
+    feed = RssFeed(id=feed_id, url=url, created_at=now)
+    db.add(feed)
     try:
-        conn.execute(
-            "INSERT INTO rss_feeds (id, url, created_at) VALUES (?, ?, ?)",
-            (feed_id, url, now),
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
         raise HTTPException(status_code=409, detail="Feed URL already added")
-    row = conn.execute(
-        "SELECT id, url, created_at FROM rss_feeds WHERE id = ?", (feed_id,)
-    ).fetchone()
-    conn.close()
-    return {"id": row["id"], "url": row["url"], "created_at": row["created_at"]}
+
+    await db.refresh(feed)
+    return {
+        "id": str(feed.id),
+        "url": feed.url,
+        "created_at": feed.created_at.isoformat(),
+    }
 
 
 @router.get("/feeds")
-def list_feeds():
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT id, url, created_at FROM rss_feeds ORDER BY created_at"
-    ).fetchall()
-    conn.close()
+async def list_feeds(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(RssFeed).order_by(RssFeed.created_at))
+    rows = result.scalars().all()
     return [
-        {"id": r["id"], "url": r["url"], "created_at": r["created_at"]}
+        {"id": str(r.id), "url": r.url, "created_at": r.created_at.isoformat()}
         for r in rows
     ]
 
 
 @router.delete("/feeds/{feed_id}")
-def delete_feed(feed_id: str):
-    conn = get_connection()
-    cur = conn.execute("DELETE FROM rss_feeds WHERE id = ?", (feed_id,))
-    conn.commit()
-    conn.close()
-    if cur.rowcount == 0:
+async def delete_feed(feed_id: str, db: AsyncSession = Depends(get_db)):
+    fid = uuid.UUID(feed_id)
+    result = await db.execute(delete(RssFeed).where(RssFeed.id == fid))
+    await db.commit()
+    if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Feed not found")
     return {"ok": True}
 
 
-def get_rss_cards_list():
-    """Return list of RSS card dicts (shared for feed assembly)."""
-    conn = get_connection()
-    rows = conn.execute("SELECT id, url FROM rss_feeds").fetchall()
-    conn.close()
+async def get_rss_cards_list(db: AsyncSession):
+    result = await db.execute(select(RssFeed.id, RssFeed.url))
+    rows = result.all()
 
     all_entries = []
     for row in rows:
         try:
-            parsed = feedparser.parse(row["url"])
+            parsed = feedparser.parse(row.url)
             feed_title = getattr(parsed.feed, "title", None) or "Unknown"
             for entry in parsed.entries:
                 link = getattr(entry, "link", None)
@@ -158,13 +154,10 @@ def get_rss_cards_list():
         except Exception:
             continue
 
-    all_entries.sort(
-        key=lambda e: e["published_at"],
-        reverse=True,
-    )
+    all_entries.sort(key=lambda e: e["published_at"], reverse=True)
     return all_entries[:20]
 
 
 @router.get("/cards")
-def get_rss_cards():
-    return get_rss_cards_list()
+async def get_rss_cards(db: AsyncSession = Depends(get_db)):
+    return await get_rss_cards_list(db)
