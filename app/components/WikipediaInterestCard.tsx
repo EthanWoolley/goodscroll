@@ -6,10 +6,15 @@ import {
   StyleSheet,
   Dimensions,
   ScrollView,
+  Platform,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, fontFamily } from "../theme";
 
 const { height } = Dimensions.get("window");
+
+/** Bottom tab bar height so card actions stay above it on iOS */
+const BOTTOM_NAV_INSET = Platform.OS === "ios" ? 56 : 0;
 
 export interface WikipediaInterestCardData {
   id: string;
@@ -27,6 +32,8 @@ interface Props {
 
 export default function WikipediaInterestCard({ card, onAnswer, onSkip }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom + BOTTOM_NAV_INSET;
 
   const toggle = (opt: string) => {
     setSelected((prev) => {
@@ -38,7 +45,7 @@ export default function WikipediaInterestCard({ card, onAnswer, onSkip }: Props)
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { paddingBottom: 28 + bottomPadding }]}>
       <Text style={styles.label}>EXPLORE YOUR INTERESTS</Text>
       <Text style={styles.question}>{card.question}</Text>
       <Text style={styles.hint}>Select all that apply</Text>
