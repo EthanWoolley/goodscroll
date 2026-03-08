@@ -1,0 +1,1 @@
+{"sessionId": "6085cc", "location": "a1b2c3d4e5f6_add_flashcards.py:upgrade", "message": "DB state before flashcard migration", "data": {"alembic_version": ["9c3437b709f6"], "flashcard_responses_exists": true, "cards_columns": ["id", "project_id", "type", "question", "options", "status", "round", "created_at"]}, "timestamp": 1772982751413.4001, "hypothesisId": "H1"}

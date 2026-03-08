@@ -16,6 +16,7 @@ import CardSwiper, { type SwipeableCard } from "../components/CardSwiper";
 import {
   api,
   type FeedItem,
+  isFlashcardFeedItem,
   isQuestionFeedItem,
   isRssFeedItem,
   isWikipediaFeedItem,
@@ -38,9 +39,11 @@ function feedItemToSwipeableCard(item: FeedItem): SwipeableCard {
     return {
       id: item.id,
       project_id: item.project_id,
-      type: item.type as "multiple_choice" | "open_ended",
+      type: item.type as "multiple_choice" | "open_ended" | "flashcard",
       question: item.question,
       options: item.options ?? null,
+      answer: item.answer ?? null,
+      topic: item.topic ?? null,
       status: item.status ?? "unanswered",
       round: item.round ?? 1,
       created_at: item.created_at ?? "",
@@ -128,6 +131,22 @@ export default function IntegratedFeedScreen() {
   const handleAnswer = useCallback(
     async (answer: string) => {
       if (!currentItem || !currentCard) return;
+      if (isFlashcardFeedItem(currentItem) && currentItem.project_id) {
+        setSubmitting(true);
+        try {
+          await api.submitFlashcardResponse(
+            currentItem.project_id,
+            { card_id: currentItem.id, response: answer as "knew" | "partly" | "didnt_know" },
+            { anthropicKey: (await AsyncStorage.getItem("anthropic_api_key")) ?? undefined }
+          );
+          removeAndAdvance();
+        } catch (e: any) {
+          Alert.alert("Error", e.message || "Failed to submit");
+        } finally {
+          setSubmitting(false);
+        }
+        return;
+      }
       if (isQuestionFeedItem(currentItem) && currentItem.project_id) {
         if (answer === "") {
           removeAndAdvance();
@@ -182,7 +201,7 @@ export default function IntegratedFeedScreen() {
       removeAndAdvance();
       return;
     }
-    if (isQuestionFeedItem(currentItem) && currentItem.project_id) {
+    if ((isQuestionFeedItem(currentItem) || isFlashcardFeedItem(currentItem)) && currentItem.project_id) {
       try {
         await api.skipCard(currentItem.project_id, currentItem.id);
       } catch {}
@@ -200,7 +219,7 @@ export default function IntegratedFeedScreen() {
 
   const handleSwipeUp = useCallback(() => {
     if (!currentItem || !currentCard) return;
-    if (isQuestionFeedItem(currentItem) || isWikiInterestQuestionItem(currentItem)) {
+    if (isQuestionFeedItem(currentItem) || isFlashcardFeedItem(currentItem) || isWikiInterestQuestionItem(currentItem)) {
       handleSkip();
     } else {
       handleAnswer("");
@@ -258,7 +277,7 @@ export default function IntegratedFeedScreen() {
           onAnswer={handleAnswer}
           onMultiAnswer={handleMultiAnswer}
           onSkip={handleSkip}
-          projectTitle={currentItem && isQuestionFeedItem(currentItem) ? currentItem.project_title : undefined}
+          projectTitle={currentItem && (isQuestionFeedItem(currentItem) || isFlashcardFeedItem(currentItem)) ? currentItem.project_title : undefined}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>

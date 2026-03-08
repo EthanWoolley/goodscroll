@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -25,6 +27,8 @@ class CardOut(BaseModel):
     type: str
     question: str
     options: list[str] | None
+    answer: str | None = None
+    topic: str | None = None
     status: str
     round: int
     created_at: str
@@ -80,6 +84,11 @@ class WikiInterestAnswerSubmit(BaseModel):
     selected_options: list[str]
 
 
+class FlashcardResponseIn(BaseModel):
+    card_id: str
+    response: Literal["knew", "partly", "didnt_know"]
+
+
 class FeedItemOut(BaseModel):
     """Unified feed item; source discriminates shape."""
     source: str  # "question" | "rss" | "wikipedia" | "wikipedia_interest_question"
@@ -107,3 +116,6 @@ class FeedItemOut(BaseModel):
     # wikipedia interest question
     wiki_interest_card_id: str | None = None
     parent_category: str | None = None
+    # flashcard
+    answer: str | None = None
+    topic: str | None = None

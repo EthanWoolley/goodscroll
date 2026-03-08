@@ -1,18 +1,19 @@
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.models import Answer, Card, Project, ProjectContextOverride
+from backend.db.models import Answer, Card, FlashcardResponse, Project, ProjectContextOverride
 from backend.db.session import get_db
 from backend.models import (
     AnswersSubmit,
     CardOut,
     ContextOut,
     ContextUpdate,
+    FlashcardResponseIn,
     NextRoundResponse,
     ProjectCreate,
     ProjectCreateResponse,
@@ -20,6 +21,7 @@ from backend.models import (
 )
 from backend.services.card_generator import generate_cards
 from backend.services.evaluator import build_qa_history, evaluate_and_generate
+from backend.services.flashcard_generator import generate_flashcards
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -31,6 +33,8 @@ def _orm_to_card(row: Card) -> CardOut:
         type=row.type,
         question=row.question,
         options=list(row.options) if row.options else None,
+        answer=row.answer,
+        topic=row.topic,
         status=row.status,
         round=row.round,
         created_at=row.created_at.isoformat(),
@@ -267,6 +271,39 @@ async def submit_answers(
     )
 
     if eval_result["status"] == "complete":
+        # Learning projects: generate flashcards once when completeness is reached
+        if project_row.project_type == "learning":
+            has_flashcard = await db.execute(
+                select(Card.id).where(
+                    Card.project_id == pid, Card.type == "flashcard"
+                ).limit(1)
+            )
+            if not has_flashcard.scalar_one_or_none():
+                try:
+                    flash_cards = generate_flashcards(
+                        description=project_row.description,
+                        qa_rows=qa_list,
+                        project_id=str(pid),
+                        api_key=api_key or None,
+                    )
+                    for c in flash_cards:
+                        db.add(
+                            Card(
+                                id=uuid.UUID(c["id"]),
+                                project_id=pid,
+                                type="flashcard",
+                                question=c["question"],
+                                options=None,
+                                answer=c.get("answer"),
+                                topic=c.get("topic"),
+                                status=c["status"],
+                                round=c["round"],
+                                created_at=datetime.fromisoformat(c["created_at"]),
+                            )
+                        )
+                    await db.commit()
+                except Exception:
+                    pass  # do not fail the request if flashcard generation fails
         return NextRoundResponse(status="complete", cards=[])
 
     for c in eval_result["cards"]:
@@ -283,6 +320,40 @@ async def submit_answers(
         db.add(card)
     await db.commit()
 
+    # Learning projects with at least 3 rounds: generate flashcards once if none exist
+    if project_row.project_type == "learning" and max_round >= 3:
+        has_flashcard = await db.execute(
+            select(Card.id).where(
+                Card.project_id == pid, Card.type == "flashcard"
+            ).limit(1)
+        )
+        if not has_flashcard.scalar_one_or_none():
+            try:
+                flash_cards = generate_flashcards(
+                    description=project_row.description,
+                    qa_rows=qa_list,
+                    project_id=str(pid),
+                    api_key=api_key or None,
+                )
+                for c in flash_cards:
+                    db.add(
+                        Card(
+                            id=uuid.UUID(c["id"]),
+                            project_id=pid,
+                            type="flashcard",
+                            question=c["question"],
+                            options=None,
+                            answer=c.get("answer"),
+                            topic=c.get("topic"),
+                            status=c["status"],
+                            round=c["round"],
+                            created_at=datetime.fromisoformat(c["created_at"]),
+                        )
+                    )
+                await db.commit()
+            except Exception:
+                pass
+
     result = await db.execute(
         select(Card)
         .where(Card.project_id == pid, Card.status != "answered")
@@ -296,6 +367,51 @@ async def submit_answers(
         status="continue",
         cards=[_orm_to_card(r) for r in card_rows],
     )
+
+
+DEFAULT_USER_ID = "default_user"
+
+
+@router.post("/{project_id}/flashcard-response")
+async def submit_flashcard_response(
+    project_id: str,
+    body: FlashcardResponseIn,
+    db: AsyncSession = Depends(get_db),
+):
+    pid = uuid.UUID(project_id)
+    cid = uuid.UUID(body.card_id)
+    result = await db.execute(
+        select(Card).where(Card.id == cid, Card.project_id == pid)
+    )
+    card = result.scalar_one_or_none()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+    if card.type != "flashcard":
+        raise HTTPException(
+            status_code=400, detail="Card is not a flashcard"
+        )
+
+    now = datetime.now(timezone.utc)
+    if body.response == "knew":
+        next_review_at = None
+    elif body.response == "partly":
+        next_review_at = now + timedelta(days=1)
+    else:
+        next_review_at = now + timedelta(days=3)
+
+    db.add(
+        FlashcardResponse(
+            id=uuid.uuid4(),
+            card_id=cid,
+            project_id=pid,
+            user_id=DEFAULT_USER_ID,
+            response=body.response,
+            next_review_at=next_review_at,
+            created_at=now,
+        )
+    )
+    await db.commit()
+    return {"ok": True}
 
 
 @router.patch("/{project_id}/cards/{card_id}/skip")

@@ -45,7 +45,7 @@ export default function WikipediaInterestCard({ card, onAnswer, onSkip }: Props)
   };
 
   return (
-    <View style={[styles.card, { paddingBottom: 28 + bottomPadding }]}>
+    <View style={[styles.card, { maxHeight: height - bottomPadding }]}>
       <Text style={styles.label}>EXPLORE YOUR INTERESTS</Text>
       <Text style={styles.question}>{card.question}</Text>
       <Text style={styles.hint}>Select all that apply</Text>

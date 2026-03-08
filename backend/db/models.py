@@ -40,8 +40,30 @@ class Card(Base):
     type: Mapped[str] = mapped_column(Text, nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     options: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    topic: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False, default="unanswered")
     round: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class FlashcardResponse(Base):
+    __tablename__ = "flashcard_responses"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("cards.id"), nullable=False
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("projects.id"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, default="default_user")
+    response: Mapped[str] = mapped_column(Text, nullable=False)
+    next_review_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

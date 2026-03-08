@@ -1,10 +1,13 @@
 """Integrated feed: question cards (all projects) + Wikipedia articles + RSS + wiki interest questions."""
 
+from datetime import datetime, timezone
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.db.models import Answer, Card, Project
+from backend.db.models import Answer, Card, FlashcardResponse, Project
 from backend.db.session import get_db
 from backend.models import FeedItemOut
 from backend.routes.rss import get_rss_cards_list
@@ -32,6 +35,8 @@ def _row_to_feed_item(card: Card, project_title: str) -> FeedItemOut:
         status=card.status,
         round=card.round,
         created_at=card.created_at.isoformat(),
+        answer=card.answer,
+        topic=card.topic,
     )
 
 
@@ -50,33 +55,101 @@ async def get_feed(request: Request, db: AsyncSession = Depends(get_db)):
     skipped_rows = skipped_result.all()
     skipped_cards = [_row_to_feed_item(r.Card, r.project_title) for r in skipped_rows]
 
-    # 2. Unanswered project question cards: round-robin by least-recently-answered project
+    # 2. Last activity per project (answers and flashcard responses)
     last_answer_result = await db.execute(
         select(Answer.project_id, func.max(Answer.created_at).label("last_at"))
         .group_by(Answer.project_id)
     )
     last_by_project = {str(r.project_id): r.last_at for r in last_answer_result.all()}
 
-    projects_result = await db.execute(
-        select(Card.project_id).where(Card.status == "unanswered").distinct()
+    last_flashcard_result = await db.execute(
+        select(
+            FlashcardResponse.project_id,
+            func.max(FlashcardResponse.created_at).label("last_at"),
+        ).group_by(FlashcardResponse.project_id)
     )
-    project_ids = [str(r.project_id) for r in projects_result.all()]
-    project_ids.sort(key=lambda pid: (str(last_by_project.get(pid) or ""), pid))
+    for r in last_flashcard_result.all():
+        pid = str(r.project_id)
+        existing = last_by_project.get(pid)
+        if existing is None or (r.last_at and r.last_at > existing):
+            last_by_project[pid] = r.last_at
+
+    # 3. Latest flashcard response per card (for due check)
+    fr_result = await db.execute(
+        select(
+            FlashcardResponse.card_id,
+            FlashcardResponse.response,
+            FlashcardResponse.next_review_at,
+        ).order_by(FlashcardResponse.created_at.desc())
+    )
+    latest_fr_by_card: dict[str, tuple[str, datetime | None]] = {}
+    for r in fr_result.all():
+        cid = str(r.card_id)
+        if cid not in latest_fr_by_card:
+            latest_fr_by_card[cid] = (r.response, r.next_review_at)
+
+    now = datetime.now(timezone.utc)
+
+    # 4. Project IDs with due cards: unanswered question cards or due flashcard cards
+    question_only_result = await db.execute(
+        select(Card.project_id)
+        .where(
+            Card.status == "unanswered",
+            Card.type.in_(["multiple_choice", "open_ended"]),
+        )
+        .distinct()
+    )
+    project_ids_set = {str(r.project_id) for r in question_only_result.all()}
+
+    flashcard_cards_result = await db.execute(
+        select(Card, Project.title.label("project_title"))
+        .join(Project, Card.project_id == Project.id)
+        .where(Card.type == "flashcard")
+    )
+    due_flashcard_rows: list[tuple[Card, str]] = []
+    for r in flashcard_cards_result.all():
+        card, title = r.Card, r.project_title
+        latest = latest_fr_by_card.get(str(card.id))
+        if latest is None:
+            due_flashcard_rows.append((card, title))
+            project_ids_set.add(str(card.project_id))
+        else:
+            response, next_review_at = latest
+            if response != "knew" and (next_review_at is None or next_review_at <= now):
+                due_flashcard_rows.append((card, title))
+                project_ids_set.add(str(card.project_id))
+
+    project_ids = sorted(
+        project_ids_set,
+        key=lambda pid: (str(last_by_project.get(pid) or ""), pid),
+    )
+
+    # 5. Per-project due cards: unanswered questions + due flashcards, by created_at
+    card_rows_by_project: dict[str, list] = {}
+    for pid in project_ids:
+        pid_uuid = UUID(pid)
+        # Unanswered question cards
+        q_result = await db.execute(
+            select(Card, Project.title.label("project_title"))
+            .join(Project, Card.project_id == Project.id)
+            .where(
+                Card.project_id == pid_uuid,
+                Card.status == "unanswered",
+                Card.type.in_(["multiple_choice", "open_ended"]),
+            )
+            .order_by(Card.created_at)
+        )
+        rows = list(q_result.all())
+        # Due flashcards for this project
+        for card, title in due_flashcard_rows:
+            if str(card.project_id) != pid:
+                continue
+            rows.append((card, title))
+        rows.sort(key=lambda r: r[0].created_at)
+        card_rows_by_project[pid] = rows
 
     unanswered_cards: list[FeedItemOut] = []
     indices: dict[str, int] = {pid: 0 for pid in project_ids}
-    card_rows_by_project: dict[str, list] = {}
-    for pid in project_ids:
-        from uuid import UUID
-        pid_uuid = UUID(pid)
-        result = await db.execute(
-            select(Card, Project.title.label("project_title"))
-            .join(Project, Card.project_id == Project.id)
-            .where(Card.project_id == pid_uuid, Card.status == "unanswered")
-            .order_by(Card.created_at)
-        )
-        card_rows_by_project[pid] = result.all()
-
     remaining = sum(len(card_rows_by_project[pid]) for pid in project_ids)
     while remaining > 0 and len(skipped_cards) + len(unanswered_cards) < FEED_LIMIT:
         for pid in project_ids:
@@ -85,7 +158,8 @@ async def get_feed(request: Request, db: AsyncSession = Depends(get_db)):
             if i >= len(rows):
                 continue
             r = rows[i]
-            unanswered_cards.append(_row_to_feed_item(r.Card, r.project_title))
+            card, title = r[0], r[1]
+            unanswered_cards.append(_row_to_feed_item(card, title))
             indices[pid] = i + 1
             remaining -= 1
             if len(skipped_cards) + len(unanswered_cards) >= FEED_LIMIT:

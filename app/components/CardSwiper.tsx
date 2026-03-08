@@ -10,6 +10,7 @@ import {
 import { type FeedCard, isRssCard } from "../api/client";
 import type { WikipediaCardData } from "./WikipediaCard";
 import type { WikipediaInterestCardData } from "./WikipediaInterestCard";
+import FlashcardCard from "./FlashcardCard";
 import MultipleChoiceCard from "./MultipleChoiceCard";
 import OpenEndedCard from "./OpenEndedCard";
 import RSSCard from "./RSSCard";
@@ -135,6 +136,20 @@ export default function CardSwiper({
       <WikipediaCard card={cardToRender} onSkip={onSkip} />
     ) : isRssCard(cardToRender) ? (
       <RSSCard card={cardToRender} onSkip={onSkip} />
+    ) : cardToRender.type === "flashcard" ? (
+      <FlashcardCard
+        card={{
+          id: cardToRender.id,
+          project_id: cardToRender.project_id,
+          type: "flashcard",
+          question: cardToRender.question,
+          answer: cardToRender.answer ?? "",
+          topic: cardToRender.topic ?? null,
+        }}
+        onAnswer={(response) => onAnswer(response)}
+        onSkip={onSkip}
+        projectTitle={projectTitle}
+      />
     ) : cardToRender.type === "multiple_choice" ? (
       <MultipleChoiceCard card={cardToRender} onAnswer={onAnswer} onSkip={onSkip} projectTitle={projectTitle} />
     ) : (

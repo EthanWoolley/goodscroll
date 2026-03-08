@@ -39,9 +39,11 @@ export interface Project {
 export interface Card {
   id: string;
   project_id: string;
-  type: "multiple_choice" | "open_ended";
+  type: "multiple_choice" | "open_ended" | "flashcard";
   question: string;
   options: string[] | null;
+  answer?: string | null;
+  topic?: string | null;
   status: string;
   round: number;
   created_at: string;
@@ -86,9 +88,11 @@ export interface FeedItem {
   id: string;
   project_id?: string;
   project_title?: string;
-  type?: "multiple_choice" | "open_ended";
+  type?: "multiple_choice" | "open_ended" | "flashcard";
   question?: string;
   options?: string[] | null;
+  answer?: string | null;
+  topic?: string | null;
   status?: string;
   round?: number;
   created_at?: string;
@@ -121,6 +125,12 @@ export function isWikiInterestQuestionItem(
   item: FeedItem
 ): item is FeedItem & { source: "wikipedia_interest_question"; wiki_interest_card_id: string } {
   return item.source === "wikipedia_interest_question" && item.wiki_interest_card_id != null;
+}
+
+export function isFlashcardFeedItem(
+  item: FeedItem
+): item is FeedItem & { source: "question"; project_id: string; type: "flashcard"; question: string; answer: string } {
+  return item.source === "question" && item.project_id != null && item.type === "flashcard" && item.question != null && item.answer != null;
 }
 
 export const api = {
@@ -206,5 +216,16 @@ export const api = {
   skipWikiInterestCard: (cardId: string) =>
     request<{ ok: boolean }>(`/wikipedia/interest-questions/${cardId}/skip`, {
       method: "PATCH",
+    }),
+
+  submitFlashcardResponse: (
+    projectId: string,
+    body: { card_id: string; response: "knew" | "partly" | "didnt_know" },
+    options?: RequestOptions
+  ) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/flashcard-response`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      ...options,
     }),
 };
