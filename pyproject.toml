@@ -1,0 +1,22 @@
+# Tooling config only. This is not a build definition and the repo is not a
+# pip-installable package; dependencies live in backend/requirements.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "app"]
+
+[tool.ruff.lint]
+# pycodestyle (E/W), pyflakes (F), isort (I), flake8-bugbear (B).
+select = ["E", "W", "F", "I", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Import order in both files is load-bearing, not accidental: load_dotenv() must
+# run before backend.db.session is imported (it reads DATABASE_URL at import
+# time), and the seed script must extend sys.path before importing backend.
+"backend/main.py" = ["E402"]
+"scripts/seed_from_sqlite.py" = ["E402"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom: `db: AsyncSession = Depends(get_db)`.
+extend-immutable-calls = ["fastapi.Depends"]
