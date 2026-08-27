@@ -24,12 +24,16 @@ Q&A so far:
 
 Decide: does this project have enough context to move forward, or are there important gaps still?
 
-For "Creating" projects, minimum sufficient context means: the user's goal is clear, key constraints or preferences are known, and there is at least one actionable next step implied.
-For "Learning" projects, minimum sufficient context means: current knowledge level is clear, target topics are identified, and learning goal or deadline is known.
+For "Creating" projects, minimum sufficient context means: the user's goal is clear, key \
+constraints or preferences are known, and there is at least one actionable next step implied.
+For "Learning" projects, minimum sufficient context means: current knowledge level is clear, \
+target topics are identified, and learning goal or deadline is known.
 
 If context is sufficient, respond with exactly: COMPLETE
 
-If more questions are needed, respond with a JSON array of 3 to 4 additional questions in the same format as before (type: multiple_choice or open_ended). No preamble, no markdown, just the JSON array or the word COMPLETE."""
+If more questions are needed, respond with a JSON array of 3 to 4 additional questions in the \
+same format as before (type: multiple_choice or open_ended). No preamble, no markdown, just \
+the JSON array or the word COMPLETE."""
 
 
 def evaluate_and_generate(
@@ -47,7 +51,9 @@ def evaluate_and_generate(
         client = anthropic.Anthropic(api_key=api_key.strip())
     else:
         client = anthropic.Anthropic()
-    qa_history = qa_history_override if qa_history_override is not None else build_qa_history(qa_rows)
+    qa_history = (
+        qa_history_override if qa_history_override is not None else build_qa_history(qa_rows)
+    )
 
     prompt = EVAL_PROMPT_TEMPLATE.format(
         project_type=project_type,

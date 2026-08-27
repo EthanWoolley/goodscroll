@@ -1,10 +1,11 @@
-"""Integrated feed: question cards (all projects) + Wikipedia articles + RSS + wiki interest questions."""
+"""Integrated feed: question cards (all projects), Wikipedia articles, RSS, and
+wiki interest questions."""
 
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.db.models import Answer, Card, FlashcardResponse, Project
@@ -237,7 +238,10 @@ async def get_feed(request: Request, db: AsyncSession = Depends(get_db)):
             r_idx += 1
             cards_since_wiki_question += 1
             cards_since_wiki_article += 1
-        elif cards_since_wiki_question >= WIKI_QUESTION_SPACING and wq_idx < len(wiki_question_items):
+        elif (
+            cards_since_wiki_question >= WIKI_QUESTION_SPACING
+            and wq_idx < len(wiki_question_items)
+        ):
             result_feed.append(wiki_question_items[wq_idx])
             wq_idx += 1
             cards_since_wiki_question = 0

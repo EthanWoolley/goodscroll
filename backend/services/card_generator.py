@@ -4,24 +4,33 @@ from datetime import datetime, timezone
 
 import anthropic
 
-SYSTEM_PROMPT = """You are a project assistant. Given a project description, generate a set of focused questions to extract the most important information needed to make progress on this project.
+SYSTEM_PROMPT = """You are a project assistant. Given a project description, generate a set of \
+focused questions to extract the most important information needed to make progress on this \
+project.
 
-For a "Creating" project: ask questions that extract the user's existing knowledge, constraints, key decisions, and next steps.
-For a "Learning" project: ask questions that assess current knowledge level, clarify what specifically they want to learn, and identify any deadlines or goals.
+For a "Creating" project: ask questions that extract the user's existing knowledge, \
+constraints, key decisions, and next steps.
+For a "Learning" project: ask questions that assess current knowledge level, clarify what \
+specifically they want to learn, and identify any deadlines or goals.
 
-Never respond with plain-text clarification or meta-questions. Always output only the JSON array of questions. If the description is vague or missing details, include questions in the array that ask for those details.
+Never respond with plain-text clarification or meta-questions. Always output only the JSON \
+array of questions. If the description is vague or missing details, include questions in the \
+array that ask for those details.
 
 Each item must be one of these two formats:
 
 Multiple choice:
-{ "type": "multiple_choice", "question": "...", "options": ["option A", "option B", "option C", "option D"] }
+{ "type": "multiple_choice", "question": "...", "options": ["option A", "option B", \
+"option C", "option D"] }
 
 Open ended:
 { "type": "open_ended", "question": "..." }
 
-Generate between 4 and 6 questions. Mix multiple choice and open ended. Keep questions specific to the project description provided. Do not generate generic questions."""
+Generate between 4 and 6 questions. Mix multiple choice and open ended. Keep questions \
+specific to the project description provided. Do not generate generic questions."""
 
-# JSON schema for structured output so the API returns only valid JSON (no plain-text clarification).
+# JSON schema for structured output so the API returns only valid JSON (no plain-text
+# clarification).
 # Root must be an object per Anthropic structured output; we use "questions" array.
 QUESTIONS_JSON_SCHEMA = {
     "type": "object",

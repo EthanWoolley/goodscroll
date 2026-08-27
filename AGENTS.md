@@ -1,27 +1,86 @@
-## Cursor Cloud specific instructions
+# Agent instructions
 
-### Overview
+## Overview
 
-GoodScroll is a two-service app: a Python FastAPI backend and a React Native Expo frontend. See `README.md` for standard setup and run commands.
+GoodScroll is a two-service app: a Python FastAPI backend and a React Native
+Expo frontend. `README.md` has the setup and run commands; this file covers what
+is specific to working in the repo rather than using it.
 
-### Services
+## Layout
 
-| Service | Command | Port | Notes |
-|---------|---------|------|-------|
-| Backend (FastAPI) | `source .venv/bin/activate && uvicorn backend.main:app --reload` | 8000 | Run from repo root. Requires PostgreSQL (see README). Run `alembic upgrade head` before first start. |
-| Frontend (Expo web) | `cd app && CI=1 npx expo start --web --port 19006` | 19006 | Use `CI=1` to avoid interactive prompts. Web deps (`react-dom`, `react-native-web`) must be installed via `npx expo install react-dom react-native-web` in `app/`. |
+| Path | What lives there |
+|------|------------------|
+| `backend/routes/` | FastAPI endpoints. `feed.py` builds the interleaved feed. |
+| `backend/services/` | Anthropic prompt chains and the Wikipedia client. Prompt text is here. |
+| `backend/db/` | SQLAlchemy models and the async session/engine. |
+| `alembic/versions/` | Migrations. |
+| `app/` | The Expo app. `api/client.ts` is the single place the backend is called from. |
+| `scripts/` | `launch_backend.sh` (full local bring-up) and `seed_from_sqlite.py`. |
 
-### Environment
+## Services
 
-- `ANTHROPIC_API_KEY` must be set in a `.env` file at the repo root (loaded by `python-dotenv`). The frontend can alternatively pass it per-request via the `X-Anthropic-Key` header.
-- `DATABASE_URL` must be set in `.env` (e.g. `postgresql+asyncpg://postgres:password@localhost:5432/scrollapp`). Start PostgreSQL via Docker: `docker run --name scrollapp-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=scrollapp -p 5432:5432 -d postgres:15`.
-- The `BASE_URL` in `app/api/client.ts` is hardcoded to a developer's LAN IP. For cloud dev, change it to `http://127.0.0.1:8000` (use `127.0.0.1`, **not** `localhost` — Chrome in this environment resolves `localhost` to IPv6 `::1` first, which uvicorn doesn't bind to, causing `ERR_CONNECTION_RESET`).
+| Service | Command | Port |
+|---------|---------|------|
+| Backend (FastAPI) | `make api`, or `.venv/bin/uvicorn backend.main:app --reload` | 8000 |
+| Frontend (Expo web) | `make web`, or `cd app && npx expo start --web` | 8081 by default |
 
-### Gotchas
+Run both from the repo root. The backend needs PostgreSQL running and
+`alembic upgrade head` applied at least once.
 
-- `backend/routes/feed.py` contains leftover debug logging that writes to a hardcoded macOS path (`/Users/ethanwoolley/...`). The `/feed` endpoint will 500 unless that directory exists. Workaround: `sudo mkdir -p "/Users/ethanwoolley/Local Work/Good scroll/goodscroll/.cursor/" && sudo chmod 777 "/Users/ethanwoolley/Local Work/Good scroll/goodscroll/.cursor/"`.
-- No ESLint or Python linter is configured. TypeScript checking: `cd app && npx tsc --noEmit`.
-- No automated test suite exists in this codebase.
-- `python3.12-venv` system package is required to create the Python virtual environment (`sudo apt-get install -y python3.12-venv`).
-- After changing `app/api/client.ts`, you **must** restart the Expo dev server with `--clear` flag (or delete `.expo/` and `node_modules/.cache`) for the Metro bundler to pick up the new code. Hot reload does NOT reliably update the bundle for this file.
-- The backend binds to `0.0.0.0:8000` but only IPv4; IPv6 (`::1`) connections will fail.
+In a non-interactive environment, set `CI=1` before `expo start` to skip the
+interactive prompts.
+
+## Environment
+
+Two `.env` files, both gitignored, both with a checked-in `.env.example`:
+
+- `.env` at the repo root — `ANTHROPIC_API_KEY` and `DATABASE_URL`. Loaded by
+  `python-dotenv` in `backend/main.py`, `alembic/env.py` and the seed script.
+- `app/.env` — `EXPO_PUBLIC_API_URL`, the backend base URL. Optional; the app
+  falls back to `http://127.0.0.1:8000`.
+
+`.env.example` is the source of truth for what the code reads. If you add a new
+variable, add it there in the same commit.
+
+The frontend can also supply the Anthropic key per request via the
+`X-Anthropic-Key` header, which every route prefers over the server's own key
+when present.
+
+## Checks
+
+`make check` runs both:
+
+- `ruff check .` — configured in `pyproject.toml`, line length 100.
+- `cd app && npm run typecheck` — `tsc --noEmit`.
+
+Both run in CI on push and pull request (`.github/workflows/ci.yml`). There is
+no automated test suite; if you change behaviour, exercise it against a running
+backend rather than assuming.
+
+Two ruff exemptions are deliberate and should not be "cleaned up":
+
+- `E402` is ignored in `backend/main.py` and `scripts/seed_from_sqlite.py`.
+  Import order there is load-bearing — `load_dotenv()` has to run before
+  `backend.db.session` is imported, because that module reads `DATABASE_URL` at
+  import time.
+- `fastapi.Depends` is registered as an immutable call, so `db: AsyncSession =
+  Depends(get_db)` does not trip `B008`.
+
+## Gotchas
+
+- Prompt text in `backend/services/` is wrapped with backslash line
+  continuations to stay under the line limit. The backslashes are what keep the
+  strings byte-identical to how they read; if you reflow a prompt, keep them, or
+  you will silently change what is sent to the model.
+- `EXPO_PUBLIC_API_URL` is compiled into the bundle at build time. After
+  changing `app/.env`, restart the Expo dev server — hot reload will not pick it
+  up. `npx expo start --clear` if a stale value persists.
+- `uvicorn` binds `127.0.0.1` by default and IPv4 only. A browser that resolves
+  `localhost` to IPv6 `::1` will fail to connect; this is why `api/client.ts`
+  defaults to `127.0.0.1` rather than `localhost`. `launch_backend.sh` passes
+  `--host 0.0.0.0` for access from other devices.
+- `backend/main.py` calls `Base.metadata.create_all` on startup, so a fresh
+  database will get tables even without migrations. Alembic is still the source
+  of truth — add a migration for schema changes rather than relying on this.
+- `scripts/seed_from_sqlite.py` is a no-op, exiting 0, if no SQLite file is
+  present. It is optional; skip it on a fresh install.

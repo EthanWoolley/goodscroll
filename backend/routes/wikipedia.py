@@ -1,5 +1,4 @@
 """Wikipedia feed cards: interest-based (category) and project-based (keyword)."""
-import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -157,7 +156,11 @@ async def get_interest_wikipedia_cards(db: AsyncSession) -> list[WikipediaCardOu
     now = datetime.now(timezone.utc)
 
     for cat in categories[:MAX_INTEREST_CATEGORIES_PER_REQUEST]:
-        articles = random_articles_from_category(cat, count=MAX_ARTICLES_PER_INTEREST_CATEGORY, exclude_titles=seen_titles)
+        articles = random_articles_from_category(
+            cat,
+            count=MAX_ARTICLES_PER_INTEREST_CATEGORY,
+            exclude_titles=seen_titles,
+        )
         for article in articles:
             title = article["title"]
             if title in seen_titles:
