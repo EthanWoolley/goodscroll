@@ -28,7 +28,8 @@ cp app/.env.example app/.env # optional; the default already points at localhost
 make web                     # start the Expo app in the browser
 ```
 
-Run `make check` to lint the Python and typecheck the TypeScript.
+Run `make check` to lint the Python and typecheck the TypeScript, and
+`make test` to run the backend test suite.
 
 The rest of this file spells out what those targets do, in case you would rather
 run the steps by hand.
@@ -57,11 +58,12 @@ Once the container exists, restart it later with `docker start scrollapp-db`
 # Create a virtual environment and install dependencies
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt   # runtime deps plus ruff
+pip install -r requirements-dev.txt   # runtime deps, test deps and ruff
 ```
 
-Use `pip install -r backend/requirements.txt` instead if you want the runtime
-dependencies only, without the linter.
+Use `pip install -r backend/requirements.txt` for the runtime dependencies
+only, or `backend/requirements-dev.txt` for those plus the test dependencies
+without the linter.
 
 ```bash
 # Configure environment
@@ -119,12 +121,17 @@ into the bundle at build time, so a hot reload will not pick it up.
 ## Checks
 
 ```bash
-make check
+make check   # lint Python, typecheck TypeScript
+make test    # run the backend test suite
 ```
 
-That runs `ruff check .` over the Python tree and `tsc --noEmit` over the app.
-Both also run in CI on every push (`.github/workflows/ci.yml`). There is no
-automated test suite yet.
+`make check` runs `ruff check .` over the Python tree and `tsc --noEmit` over
+the app. `make test` runs pytest over `backend/tests/`. All three run in CI on
+every push (`.github/workflows/ci.yml`).
+
+The test suite needs neither PostgreSQL nor an Anthropic key: the Anthropic
+client is replaced by a fake, database sessions are replaced by a scripted
+double, and an autouse fixture fails any attempt to open a network connection.
 
 ## Architecture
 
