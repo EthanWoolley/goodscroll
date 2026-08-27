@@ -21,9 +21,39 @@ UNSET = object()
 FIXED_NOW = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def row(**fields):
-    """Stand in for a SQLAlchemy Row: attribute access over the selected columns."""
-    return SimpleNamespace(**fields)
+class FakeRow:
+    """Stand in for a SQLAlchemy Row.
+
+    Rows support attribute access by column label *and* positional indexing,
+    and handlers use both — feed.py sorts on ``r[0].created_at`` while reading
+    ``r.project_title`` elsewhere — so the double is faithful to both.
+    """
+
+    def __init__(self, **fields):
+        object.__setattr__(self, "_fields", dict(fields))
+
+    def __getattr__(self, name):
+        try:
+            return self._fields[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __getitem__(self, index):
+        return list(self._fields.values())[index]
+
+    def __iter__(self):
+        return iter(self._fields.values())
+
+    def __len__(self):
+        return len(self._fields)
+
+    def __repr__(self):
+        return "FakeRow(%s)" % ", ".join(f"{k}={v!r}" for k, v in self._fields.items())
+
+
+def row(**fields) -> FakeRow:
+    """Build a :class:`FakeRow` from the columns a query selects."""
+    return FakeRow(**fields)
 
 
 def make_project(
