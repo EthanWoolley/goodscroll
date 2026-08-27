@@ -676,3 +676,109 @@ def test_skip_card_with_a_malformed_id_is_a_server_error(client_factory):
     )
 
     assert resp.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Flashcards on the continue path (learning projects from round 3 onwards)
+# ---------------------------------------------------------------------------
+
+def late_round_session(has_flashcard_scalar):
+    """Scripted results for a learning project continuing past round 3."""
+    return FakeSession(
+        [
+            FakeResult(scalar=make_project(PROJECT_ID, project_type="learning")),
+            FakeResult(),
+            FakeResult(rows=[]),
+            FakeResult(scalar=3),
+            FakeResult(scalar="ctx"),
+            FakeResult(scalar=has_flashcard_scalar),
+            FakeResult(rows=[]),
+        ]
+    )
+
+
+def continue_with_one_card(**kwargs):
+    return {"status": "continue", "cards": [generated_card("Next?", round_number=4)]}
+
+
+def test_submit_answers_generates_flashcards_on_a_late_learning_round(
+    client_factory, monkeypatch
+):
+    monkeypatch.setattr(projects_route, "evaluate_and_generate", continue_with_one_card)
+    monkeypatch.setattr(
+        projects_route,
+        "generate_flashcards",
+        lambda **kw: [
+            {
+                "id": str(uuid.uuid4()),
+                "question": "What is a B-tree?",
+                "answer": "A balanced tree",
+                "topic": "Databases",
+                "status": "unanswered",
+                "round": 1,
+                "created_at": FIXED_NOW.isoformat(),
+            }
+        ],
+    )
+    session = late_round_session(None)
+
+    resp = client_factory(session).post(f"/projects/{PROJECT_ID}/answers", json=ANSWERS)
+
+    assert resp.json()["status"] == "continue"
+    types = [c.type for c in session.added_of(Card)]
+    assert types == ["open_ended", "flashcard"]
+
+
+def test_submit_answers_skips_late_flashcards_when_some_already_exist(
+    client_factory, monkeypatch
+):
+    monkeypatch.setattr(projects_route, "evaluate_and_generate", continue_with_one_card)
+
+    def should_not_run(**kwargs):
+        raise AssertionError("flashcards should not be regenerated")
+
+    monkeypatch.setattr(projects_route, "generate_flashcards", should_not_run)
+    session = late_round_session(CARD_ID)
+
+    resp = client_factory(session).post(f"/projects/{PROJECT_ID}/answers", json=ANSWERS)
+
+    assert resp.json()["status"] == "continue"
+
+
+def test_submit_answers_swallows_a_late_flashcard_failure(client_factory, monkeypatch):
+    monkeypatch.setattr(projects_route, "evaluate_and_generate", continue_with_one_card)
+
+    def boom(**kwargs):
+        raise ValueError("Flashcard response was not a JSON array")
+
+    monkeypatch.setattr(projects_route, "generate_flashcards", boom)
+    session = late_round_session(None)
+
+    resp = client_factory(session).post(f"/projects/{PROJECT_ID}/answers", json=ANSWERS)
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "continue"
+
+
+def test_submit_answers_skips_flashcards_for_a_creating_project(client_factory, monkeypatch):
+    """The flashcard block is gated on project_type, not just the round number."""
+    monkeypatch.setattr(projects_route, "evaluate_and_generate", continue_with_one_card)
+
+    def should_not_run(**kwargs):
+        raise AssertionError("creating projects never get flashcards")
+
+    monkeypatch.setattr(projects_route, "generate_flashcards", should_not_run)
+    session = FakeSession(
+        [
+            FakeResult(scalar=make_project(PROJECT_ID, project_type="creating")),
+            FakeResult(),
+            FakeResult(rows=[]),
+            FakeResult(scalar=3),
+            FakeResult(scalar="ctx"),
+            FakeResult(rows=[]),
+        ]
+    )
+
+    assert client_factory(session).post(
+        f"/projects/{PROJECT_ID}/answers", json=ANSWERS
+    ).json()["status"] == "continue"

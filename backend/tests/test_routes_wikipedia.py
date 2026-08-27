@@ -492,3 +492,184 @@ async def test_ensure_questions_skips_a_drilldown_that_already_has_a_card(monkey
     )
 
     assert await wiki_route.ensure_wiki_interest_questions(session) == []
+
+
+# ---------------------------------------------------------------------------
+# Remaining branches
+# ---------------------------------------------------------------------------
+
+def test_get_cards_ignores_a_non_list_selected_options_value(client_factory, monkeypatch):
+    """Guards the ARRAY column coming back as something other than a list."""
+    patch_services(monkeypatch)
+    session = FakeSession(
+        [
+            FakeResult(scalar=None),  # interests
+            FakeResult(rows=[row(selected_options="Category:Databases")]),
+            FakeResult(rows=[]),  # projects
+            FakeResult(rows=[]),  # shown titles (project phase)
+        ]
+    )
+
+    assert client_factory(session).get("/wikipedia/cards").json() == []
+
+
+def test_get_cards_refreshes_cached_keywords_when_the_description_changed(
+    client_factory, monkeypatch
+):
+    patch_services(monkeypatch, summary=ARTICLE, keywords=["Kubernetes"])
+    stale = ProjectKeyword(
+        project_id=PROJECT_ID,
+        keywords=["Old topic"],
+        generated_at=FIXED_NOW,
+        description_snapshot="Infra\nan older description",
+    )
+    session = FakeSession(
+        [
+            FakeResult(scalar=None),  # interests
+            FakeResult(rows=[]),  # answered interest questions
+            FakeResult(rows=[row(id=PROJECT_ID, title="Infra", description="k8s work")]),
+            FakeResult(scalar=stale),  # cached keywords
+            FakeResult(),  # the update
+            FakeResult(rows=[]),  # shown titles (project phase)
+        ]
+    )
+
+    body = client_factory(session).get("/wikipedia/cards").json()
+
+    assert body[0]["source_term"] == "Kubernetes"
+    assert session.added_of(ProjectKeyword) == []
+
+
+def test_get_cards_discards_blank_and_non_string_keywords(client_factory, monkeypatch):
+    seen = []
+
+    def summary(term):
+        seen.append(term)
+        return dict(ARTICLE, title=f"Article about {term}")
+
+    monkeypatch.setattr(wiki_route, "random_articles_from_category", lambda *a, **kw: [])
+    monkeypatch.setattr(wiki_route, "fetch_wikipedia_summary", summary)
+    monkeypatch.setattr(
+        wiki_route, "extract_project_keywords", lambda *a, **kw: ["  Kubernetes  ", "   ", 42]
+    )
+    session = FakeSession(
+        [
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+            FakeResult(rows=[row(id=PROJECT_ID, title="Infra", description="k8s work")]),
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+        ]
+    )
+
+    client_factory(session).get("/wikipedia/cards")
+
+    assert seen == ["Kubernetes"]
+
+
+def test_get_cards_stops_at_the_project_card_cap(client_factory, monkeypatch):
+    monkeypatch.setattr(wiki_route, "random_articles_from_category", lambda *a, **kw: [])
+    monkeypatch.setattr(
+        wiki_route,
+        "fetch_wikipedia_summary",
+        lambda term: dict(ARTICLE, title=f"Article about {term}"),
+    )
+    monkeypatch.setattr(
+        wiki_route, "extract_project_keywords", lambda *a, **kw: ["a", "b", "c", "d", "e"]
+    )
+    session = FakeSession(
+        [
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+            FakeResult(rows=[row(id=PROJECT_ID, title="Infra", description="k8s work")]),
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+        ]
+    )
+
+    body = client_factory(session).get("/wikipedia/cards").json()
+
+    assert len(body) == wiki_route.PROJECT_MAX_CARDS
+
+
+def test_get_cards_skips_a_second_keyword_resolving_to_the_same_article(
+    client_factory, monkeypatch
+):
+    monkeypatch.setattr(wiki_route, "random_articles_from_category", lambda *a, **kw: [])
+    monkeypatch.setattr(wiki_route, "fetch_wikipedia_summary", lambda term: ARTICLE)
+    monkeypatch.setattr(
+        wiki_route, "extract_project_keywords", lambda *a, **kw: ["k8s", "kubernetes"]
+    )
+    session = FakeSession(
+        [
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+            FakeResult(rows=[row(id=PROJECT_ID, title="Infra", description="k8s work")]),
+            FakeResult(scalar=None),
+            FakeResult(rows=[]),
+        ]
+    )
+
+    body = client_factory(session).get("/wikipedia/cards").json()
+
+    assert [c["title"] for c in body] == ["Kubernetes"]
+
+
+async def test_ensure_questions_stops_at_the_per_request_cap(monkeypatch):
+    """Five interests plus a drill-down candidate, capped at four new questions."""
+    patch_services(monkeypatch, subcategories=["Category:Databases"])
+    session = FakeSession(
+        [
+            FakeResult(rows=[]),  # pending question cards
+            FakeResult(scalar=[f"Category:C{i}" for i in range(5)]),  # interests
+            FakeResult(rows=[row(category_title="Category:Extra", read_count=9)]),
+            FakeResult(rows=[]),  # categories that already have a card
+        ]
+    )
+
+    result = await wiki_route.ensure_wiki_interest_questions(session)
+
+    assert len(result) == wiki_route.MAX_NEW_WIKI_QUESTIONS_PER_REQUEST
+
+
+async def test_ensure_questions_creates_none_when_no_subcategories_exist(monkeypatch):
+    """generate_wiki_interest_question returns None, so both loops just move on."""
+    patch_services(monkeypatch, subcategories=[])
+    session = FakeSession(
+        [
+            FakeResult(rows=[]),  # pending question cards
+            FakeResult(scalar=["Category:Technology"]),  # interests
+            FakeResult(rows=[row(category_title="Category:Robotics", read_count=9)]),
+            FakeResult(rows=[]),  # categories that already have a card
+        ]
+    )
+
+    result = await wiki_route.ensure_wiki_interest_questions(session)
+
+    assert result == []
+    assert session.added_of(WikiInterestCard) == []
+
+
+async def test_ensure_questions_skips_a_drilldown_already_pending(monkeypatch):
+    """A drill-down candidate that already has a pending card is not duplicated."""
+    patch_services(monkeypatch, subcategories=["Category:Databases"])
+    pending = WikiInterestCard(
+        id=CARD_ID,
+        parent_category="Category:Technology",
+        options=["Category:Databases"],
+        status="unanswered",
+        created_at=FIXED_NOW,
+    )
+    session = FakeSession(
+        [
+            FakeResult(rows=[pending]),  # pending question cards
+            FakeResult(scalar=[]),  # interests
+            FakeResult(rows=[row(category_title="Category:Technology", read_count=9)]),
+            FakeResult(rows=[]),  # categories that already have a card
+        ]
+    )
+
+    result = await wiki_route.ensure_wiki_interest_questions(session)
+
+    assert len(result) == 1
+    assert session.added_of(WikiInterestCard) == []

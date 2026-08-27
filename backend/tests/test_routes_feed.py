@@ -55,12 +55,19 @@ def rss_card(title="First post"):
     }
 
 
-def base_results(skipped=(), question_projects=(), flashcards=(), responses=()):
+def base_results(
+    skipped=(),
+    question_projects=(),
+    flashcards=(),
+    responses=(),
+    last_answers=(),
+    last_flashcard_activity=(),
+):
     """The six fixed queries every request to /feed makes."""
     return [
         FakeResult(rows=list(skipped)),
-        FakeResult(rows=[]),
-        FakeResult(rows=[]),
+        FakeResult(rows=list(last_answers)),
+        FakeResult(rows=list(last_flashcard_activity)),
         FakeResult(rows=list(responses)),
         FakeResult(rows=[row(project_id=pid) for pid in question_projects]),
         FakeResult(rows=list(flashcards)),
@@ -372,3 +379,149 @@ def test_feed_surfaces_an_rss_source_failure_as_500(client_factory, monkeypatch)
     resp = client_factory(session, raise_server_exceptions=False).get("/feed")
 
     assert resp.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Project ordering and per-project assembly
+# ---------------------------------------------------------------------------
+
+def test_feed_orders_projects_by_least_recent_activity(client_factory, monkeypatch):
+    """Flashcard responses count as activity, and the later timestamp wins."""
+    patch_sources(monkeypatch)
+    a1 = make_card(project_id=PROJECT_A, question="A1")
+    b1 = make_card(project_id=PROJECT_B, question="B1")
+    session = FakeSession(
+        base_results(
+            question_projects=[PROJECT_A, PROJECT_B],
+            last_answers=[row(project_id=PROJECT_A, last_at=FIXED_NOW)],
+            last_flashcard_activity=[
+                # Later than the answer above, so it replaces it for A.
+                row(project_id=PROJECT_A, last_at=FIXED_NOW + timedelta(days=120)),
+                row(project_id=PROJECT_B, last_at=FIXED_NOW + timedelta(days=30)),
+            ],
+        )
+        + [
+            FakeResult(rows=[row(Card=b1, project_title="B")]),
+            FakeResult(rows=[row(Card=a1, project_title="A")]),
+        ]
+    )
+
+    body = client_factory(session).get("/feed").json()
+
+    # B was touched longer ago than A, so B's card comes first.
+    assert [c["question"] for c in body] == ["B1", "A1"]
+
+
+def test_feed_offers_a_due_flashcard_only_to_its_own_project(client_factory, monkeypatch):
+    patch_sources(monkeypatch)
+    a1 = make_card(project_id=PROJECT_A, question="A1")
+    b1 = make_card(project_id=PROJECT_B, question="B1")
+    flashcard = make_card(project_id=PROJECT_A, card_type="flashcard", question="B-tree?")
+    session = FakeSession(
+        base_results(
+            question_projects=[PROJECT_A, PROJECT_B],
+            flashcards=[row(Card=flashcard, project_title="A")],
+        )
+        + [
+            FakeResult(rows=[row(Card=a1, project_title="A")]),
+            FakeResult(rows=[row(Card=b1, project_title="B")]),
+        ]
+    )
+
+    body = client_factory(session).get("/feed").json()
+
+    questions = [c["question"] for c in body]
+    assert "B-tree?" in questions
+    # The flashcard belongs to A only; B contributes just its own question.
+    assert questions.count("B-tree?") == 1
+
+
+# ---------------------------------------------------------------------------
+# Remaining interleave branches
+# ---------------------------------------------------------------------------
+
+def test_feed_inserts_a_wikipedia_card_after_three_other_cards(client_factory, monkeypatch):
+    patch_sources(monkeypatch, wiki_cards=[wiki_card("Kubernetes")])
+    cards = [make_card(project_id=PROJECT_A, question=f"Q{i}") for i in range(6)]
+    session = FakeSession(
+        base_results(question_projects=[PROJECT_A])
+        + [FakeResult(rows=[row(Card=c, project_title="A") for c in cards])]
+    )
+
+    body = client_factory(session).get("/feed").json()
+
+    assert [c["source"] for c in body[:4]] == [
+        "question",
+        "question",
+        "question",
+        "wikipedia",
+    ]
+
+
+def test_feed_falls_back_to_remaining_wiki_questions(client_factory, monkeypatch):
+    """Once questions and articles run out, spacing no longer gates the queue."""
+    questions = [
+        {
+            "id": str(uuid.uuid4()),
+            "parent_category": f"Category:C{i}",
+            "options_full": [f"Category:S{i}"],
+            "options_display": [f"S{i}"],
+        }
+        for i in range(3)
+    ]
+    patch_sources(monkeypatch, wiki_questions=questions)
+    session = FakeSession(base_results())
+
+    body = client_factory(session).get("/feed").json()
+
+    assert len(body) == 3
+    assert all(c["source"] == "wikipedia_interest_question" for c in body)
+
+
+def test_feed_omits_wikipedia_entirely_when_the_toggle_is_set(client_factory, monkeypatch):
+    """SKIP_WIKI_IN_FEED short-circuits both Wikipedia sources without calling them."""
+
+    async def should_not_run(*args, **kwargs):
+        raise AssertionError("Wikipedia sources must not be called when skipping")
+
+    async def rss(db):
+        return [rss_card("R1")]
+
+    monkeypatch.setattr(feed_route, "SKIP_WIKI_IN_FEED", True)
+    monkeypatch.setattr(feed_route, "ensure_wiki_interest_questions", should_not_run)
+    monkeypatch.setattr(feed_route, "get_wikipedia_cards_for_feed", should_not_run)
+    monkeypatch.setattr(feed_route, "get_rss_cards_list", rss)
+    session = FakeSession(base_results())
+
+    body = client_factory(session).get("/feed").json()
+
+    assert [c["source"] for c in body] == ["rss"]
+
+
+def test_feed_keeps_the_later_activity_when_a_flashcard_response_is_older(
+    client_factory, monkeypatch
+):
+    """An older flashcard response must not overwrite a newer answer timestamp."""
+    patch_sources(monkeypatch)
+    a1 = make_card(project_id=PROJECT_A, question="A1")
+    b1 = make_card(project_id=PROJECT_B, question="B1")
+    session = FakeSession(
+        base_results(
+            question_projects=[PROJECT_A, PROJECT_B],
+            last_answers=[
+                row(project_id=PROJECT_A, last_at=FIXED_NOW + timedelta(days=120)),
+                row(project_id=PROJECT_B, last_at=FIXED_NOW + timedelta(days=30)),
+            ],
+            # Older than A's answer above, so it is ignored.
+            last_flashcard_activity=[row(project_id=PROJECT_A, last_at=FIXED_NOW)],
+        )
+        + [
+            FakeResult(rows=[row(Card=b1, project_title="B")]),
+            FakeResult(rows=[row(Card=a1, project_title="A")]),
+        ]
+    )
+
+    body = client_factory(session).get("/feed").json()
+
+    # A is still the most recently touched project, so B leads.
+    assert [c["question"] for c in body] == ["B1", "A1"]

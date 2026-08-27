@@ -422,3 +422,120 @@ def test_get_rss_cards_defaults_an_unknown_feed_title(
     body = client_factory(session).get("/rss/cards").json()
 
     assert body[0]["source"] == ("Unknown" if missing_title else "Named Feed")
+
+
+# ---------------------------------------------------------------------------
+# feedparser hands back objects as well as dicts
+# ---------------------------------------------------------------------------
+
+def test_extract_image_url_reads_object_shaped_media_content():
+    result = _extract_image_url(
+        entry(media_content=[SimpleNamespace(url="https://example.com/a.jpg")])
+    )
+
+    assert result == "https://example.com/a.jpg"
+
+
+def test_extract_image_url_reads_object_shaped_media_thumbnail():
+    result = _extract_image_url(
+        entry(media_thumbnail=[SimpleNamespace(url="https://example.com/b.jpg")])
+    )
+
+    assert result == "https://example.com/b.jpg"
+
+
+def test_extract_image_url_reads_object_shaped_enclosures():
+    result = _extract_image_url(
+        entry(enclosures=[SimpleNamespace(type="image/png", href="https://example.com/c.png")])
+    )
+
+    assert result == "https://example.com/c.png"
+
+
+def test_extract_image_url_skips_media_entries_with_no_url():
+    """A media_content entry without a url falls through to the next source."""
+    result = _extract_image_url(
+        entry(
+            media_content=[{"nourl": True}],
+            media_thumbnail=[{"url": "https://example.com/b.jpg"}],
+        )
+    )
+
+    assert result == "https://example.com/b.jpg"
+
+
+def test_get_rss_cards_reads_a_dict_shaped_summary(client_factory, monkeypatch):
+    """feedparser can hand back a detail dict where a summary string is expected."""
+    monkeypatch.setattr(
+        rss_route.feedparser,
+        "parse",
+        lambda url: parsed_feed(
+            entries=[
+                entry(
+                    id="entry-1",
+                    link="https://example.com/a",
+                    title="First post",
+                    summary={"value": "A  detail  summary"},
+                    published="2026-01-01T00:00:00+00:00",
+                )
+            ]
+        ),
+    )
+    session = FakeSession([FakeResult(rows=[row(id=FEED_ID, url="https://example.com/f.xml")])])
+
+    body = client_factory(session).get("/rss/cards").json()
+
+    assert body[0]["summary"] == "A detail summary"
+
+
+def test_get_rss_cards_falls_back_to_description(client_factory, monkeypatch):
+    monkeypatch.setattr(
+        rss_route.feedparser,
+        "parse",
+        lambda url: parsed_feed(
+            entries=[
+                entry(
+                    id="entry-1",
+                    link="https://example.com/a",
+                    title="First post",
+                    description="From description",
+                    published="2026-01-01T00:00:00+00:00",
+                )
+            ]
+        ),
+    )
+    session = FakeSession([FakeResult(rows=[row(id=FEED_ID, url="https://example.com/f.xml")])])
+
+    body = client_factory(session).get("/rss/cards").json()
+
+    assert body[0]["summary"] == "From description"
+
+
+def test_extract_image_url_falls_past_a_urlless_thumbnail_to_enclosures():
+    result = _extract_image_url(
+        entry(
+            media_thumbnail=[{"nourl": True}],
+            enclosures=[{"type": "image/png", "href": "https://example.com/c.png"}],
+        )
+    )
+
+    assert result == "https://example.com/c.png"
+
+
+def test_extract_image_url_skips_an_image_enclosure_with_no_href():
+    """The loop keeps going rather than returning None on the first bad entry."""
+    result = _extract_image_url(
+        entry(
+            enclosures=[
+                {"type": "image/png"},
+                {"type": "image/jpeg", "href": "https://example.com/d.jpg"},
+            ]
+        )
+    )
+
+    assert result == "https://example.com/d.jpg"
+
+
+def test_extract_image_url_returns_none_for_an_img_tag_with_no_src():
+    """The substring check passes but the regex does not match."""
+    assert _extract_image_url(entry(summary='<img alt="decorative">')) is None
