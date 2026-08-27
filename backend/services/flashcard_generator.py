@@ -16,12 +16,15 @@ def build_qa_history(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-FLASHCARD_PROMPT_TEMPLATE = """You are a learning assistant. Based on this learning project and the user's Q&A history, generate flashcards to test their knowledge on the topics they want to learn.
+FLASHCARD_PROMPT_TEMPLATE = """You are a learning assistant. Based on this learning project \
+and the user's Q&A history, generate flashcards to test their knowledge on the topics they \
+want to learn.
 
 Project description: {description}
 Q&A history: {qa_history}
 
-Generate 5 flashcards. Each should test a specific, concrete piece of knowledge relevant to the project's learning goals. Avoid vague or overly broad questions.
+Generate 5 flashcards. Each should test a specific, concrete piece of knowledge relevant to \
+the project's learning goals. Avoid vague or overly broad questions.
 
 Return ONLY a JSON array. No preamble, no markdown. Each item:
 {{
@@ -37,7 +40,8 @@ def generate_flashcards(
     project_id: str,
     api_key: str | None = None,
 ) -> list[dict]:
-    """Returns a list of dicts with question, answer, topic. Each will be stored as a card with type='flashcard'."""
+    """Returns a list of dicts with question, answer, topic.
+    Each will be stored as a card with type='flashcard'."""
     if api_key and api_key.strip():
         client = anthropic.Anthropic(api_key=api_key.strip())
     else:

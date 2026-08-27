@@ -32,12 +32,14 @@ def _truncate_summary(text: str, max_len: int = 200) -> str:
 def _extract_image_url(entry) -> str | None:
     media_content = getattr(entry, "media_content", None)
     if media_content and len(media_content) > 0:
-        url = media_content[0].get("url") if isinstance(media_content[0], dict) else getattr(media_content[0], "url", None)
+        first = media_content[0]
+        url = first.get("url") if isinstance(first, dict) else getattr(first, "url", None)
         if url:
             return url
     media_thumbnail = getattr(entry, "media_thumbnail", None)
     if media_thumbnail and len(media_thumbnail) > 0:
-        url = media_thumbnail[0].get("url") if isinstance(media_thumbnail[0], dict) else getattr(media_thumbnail[0], "url", None)
+        first = media_thumbnail[0]
+        url = first.get("url") if isinstance(first, dict) else getattr(first, "url", None)
         if url:
             return url
     enclosures = getattr(entry, "enclosures", None) or []
@@ -86,7 +88,7 @@ async def add_feed(body: RssFeedAdd, db: AsyncSession = Depends(get_db)):
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Feed URL already added")
+        raise HTTPException(status_code=409, detail="Feed URL already added") from None
 
     await db.refresh(feed)
     return {

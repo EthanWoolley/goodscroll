@@ -7,9 +7,10 @@ Create Date: 2026-03-08
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 revision: str = "a1b2c3d4e5f6"
 down_revision: Union[str, Sequence[str], None] = "9c3437b709f6"
@@ -20,14 +21,24 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     conn = op.get_bind()
     # Idempotent: add columns only if missing (table may exist from partial prior run)
-    cr = conn.execute(sa.text("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cards'")).fetchall()
+    cr = conn.execute(
+        sa.text(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND table_name = 'cards'"
+        )
+    ).fetchall()
     card_cols = {r[0] for r in cr}
     if "answer" not in card_cols:
         op.add_column("cards", sa.Column("answer", sa.Text(), nullable=True))
     if "topic" not in card_cols:
         op.add_column("cards", sa.Column("topic", sa.Text(), nullable=True))
 
-    tr = conn.execute(sa.text("SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'flashcard_responses'")).fetchall()
+    tr = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = 'public' AND table_name = 'flashcard_responses'"
+        )
+    ).fetchall()
     if not tr:
         op.create_table(
             "flashcard_responses",

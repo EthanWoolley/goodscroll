@@ -1,16 +1,15 @@
 """Wikipedia summary fetch and project keyword extraction for feed cards."""
 import json
 import re
-import uuid
-from datetime import datetime, timezone
 from urllib.parse import quote
-from urllib.request import urlopen, Request
+from urllib.request import Request, urlopen
 
 import anthropic
 
-
 WIKI_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{}"
-KEYWORD_PROMPT = """Given this project title and description, return a JSON array of 2-3 short search terms suitable for a Wikipedia search. Focus on concrete topics, not verbs or generic words. Return only the JSON array, no preamble.
+KEYWORD_PROMPT = """Given this project title and description, return a JSON array of 2-3 \
+short search terms suitable for a Wikipedia search. Focus on concrete topics, not verbs or \
+generic words. Return only the JSON array, no preamble.
 
 Title: {title}
 Description: {description}"""
@@ -73,7 +72,11 @@ def fetch_wikipedia_summary(term: str) -> dict | None:
 
 def extract_project_keywords(title: str, description: str, api_key: str | None = None) -> list[str]:
     """Call Anthropic to get 2-3 Wikipedia search terms from project title and description."""
-    client = anthropic.Anthropic(api_key=api_key.strip()) if api_key and api_key.strip() else anthropic.Anthropic()
+    client = (
+        anthropic.Anthropic(api_key=api_key.strip())
+        if api_key and api_key.strip()
+        else anthropic.Anthropic()
+    )
     prompt = KEYWORD_PROMPT.format(title=title or "", description=description or "")
     response = client.messages.create(
         model="claude-sonnet-4-6",

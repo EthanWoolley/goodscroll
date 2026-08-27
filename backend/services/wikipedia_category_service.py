@@ -2,7 +2,7 @@
 import json
 import random
 from urllib.parse import quote
-from urllib.request import urlopen, Request
+from urllib.request import Request, urlopen
 
 from backend.services.wikipedia_service import fetch_wikipedia_summary
 
