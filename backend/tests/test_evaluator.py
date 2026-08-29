@@ -11,7 +11,12 @@ from datetime import datetime
 
 import pytest
 
-from backend.services.evaluator import EVAL_PROMPT_TEMPLATE, build_qa_history, evaluate_and_generate
+from backend.services.evaluator import (
+    EVAL_PROMPT_TEMPLATE,
+    build_qa_history,
+    evaluate_and_generate,
+    is_completion_response,
+)
 
 QUESTION_ARRAY = json.dumps(
     [
@@ -59,17 +64,64 @@ def test_completion_check_is_case_insensitive(anthropic_stub, text):
     assert call(anthropic_stub, text)["status"] == "complete"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Gap: the check is an exact match on the whole response, so a trailing "
-        "full stop stops it matching. The response then falls through to "
-        "json.loads and raises a bare JSONDecodeError, turning a completed "
-        "project into a 500. Whether to loosen the match is a product call."
-    ),
-)
 def test_recognises_complete_with_a_trailing_full_stop(anthropic_stub):
     assert call(anthropic_stub, "COMPLETE.")["status"] == "complete"
+
+
+def test_recognises_complete_wrapped_in_markdown_emphasis(anthropic_stub):
+    assert call(anthropic_stub, "**COMPLETE**")["status"] == "complete"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "COMPLETE",
+        "COMPLETE.",
+        "COMPLETE!",
+        "complete.",
+        "  COMPLETE  ",
+        "COMPLETE\n",
+        "\n COMPLETE .",
+        "**COMPLETE**",
+        "*COMPLETE*",
+        "**COMPLETE.**",
+        '"COMPLETE"',
+        "'COMPLETE'",
+        "`COMPLETE`",
+        "_COMPLETE_",
+    ],
+)
+def test_is_completion_response_accepts_a_decorated_signal(text):
+    """Punctuation and markdown emphasis around the bare word still count."""
+    assert is_completion_response(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "   ",
+        ".",
+        "***",
+        "INCOMPLETE",
+        "COMPLETED",
+        "Not complete",
+        "COMPLETE COMPLETE",
+        "COMPLETE the following questions:",
+        "The project context is now COMPLETE, well done.",
+        '[{"type": "open_ended", "question": "Is the design complete?"}]',
+        '[{"type": "open_ended", "question": "COMPLETE"}]',
+        '{"questions": [{"type": "open_ended", "question": "complete?"}]}',
+        'COMPLETE\n[{"type": "open_ended", "question": "Q?"}]',
+    ],
+)
+def test_is_completion_response_rejects_everything_else(text):
+    """The trim must not widen the check into a substring or prefix match.
+
+    Every entry here would be misread as a finished project by a naive
+    ``"COMPLETE" in raw`` or ``raw.startswith("COMPLETE")`` check.
+    """
+    assert not is_completion_response(text)
 
 
 # ---------------------------------------------------------------------------
