@@ -1,3 +1,4 @@
-# Developer tooling. Runtime dependencies live in backend/requirements.txt.
--r backend/requirements.txt
+# Developer tooling. Runtime dependencies live in backend/requirements.txt and
+# test dependencies in backend/requirements-dev.txt.
+-r backend/requirements-dev.txt
 ruff>=0.14

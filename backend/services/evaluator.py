@@ -35,6 +35,19 @@ If more questions are needed, respond with a JSON array of 3 to 4 additional que
 same format as before (type: multiple_choice or open_ended). No preamble, no markdown, just \
 the JSON array or the word COMPLETE."""
 
+# The prompt asks for exactly "COMPLETE", but models routinely decorate a
+# one-word answer with sentence punctuation or markdown emphasis. Trim those
+# from both ends before comparing. This deliberately stays an equality check on
+# the whole response rather than a substring search: a question array that
+# merely mentions "complete" must never be read as a completion signal.
+COMPLETION_TOKEN = "COMPLETE"
+COMPLETION_TRIM_CHARS = " \t\r\n.!*_`\"'"
+
+
+def is_completion_response(raw: str) -> bool:
+    """True when the whole response is the completion signal and nothing else."""
+    return raw.upper().strip(COMPLETION_TRIM_CHARS) == COMPLETION_TOKEN
+
 
 def evaluate_and_generate(
     project_type: str,
@@ -69,7 +82,7 @@ def evaluate_and_generate(
 
     raw = response.content[0].text.strip()
 
-    if raw.upper() == "COMPLETE":
+    if is_completion_response(raw):
         return {"status": "complete", "cards": []}
 
     if raw.startswith("```"):

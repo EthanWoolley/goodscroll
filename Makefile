@@ -2,7 +2,7 @@
 VENV := .venv
 BIN  := $(VENV)/bin
 
-.PHONY: install db migrate api web check
+.PHONY: install db migrate api web check test
 
 install:  ## Create the virtualenv and install Python + JavaScript dependencies
 	python3 -m venv $(VENV)
@@ -28,3 +28,6 @@ web:  ## Run the Expo app in the browser
 check:  ## Lint Python and typecheck TypeScript
 	$(BIN)/ruff check .
 	cd app && npm run typecheck
+
+test:  ## Run the backend test suite (no database or network required)
+	$(BIN)/pytest

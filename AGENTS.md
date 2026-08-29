@@ -53,9 +53,22 @@ when present.
 - `ruff check .` — configured in `pyproject.toml`, line length 100.
 - `cd app && npm run typecheck` — `tsc --noEmit`.
 
-Both run in CI on push and pull request (`.github/workflows/ci.yml`). There is
-no automated test suite; if you change behaviour, exercise it against a running
-backend rather than assuming.
+`make test` runs the backend suite in `backend/tests/`. All three run in CI on
+push and pull request (`.github/workflows/ci.yml`).
+
+The suite covers the backend's non-AI logic only, and runs without PostgreSQL,
+without an Anthropic key and without network access:
+
+- `anthropic.Anthropic` is patched out per test by the `anthropic_stub`
+  fixture, which queues canned response text.
+- Route handlers get a `FakeSession` through a `get_db` dependency override. It
+  replays scripted results in the order the handler queries, so a test breaks
+  loudly when a handler gains or loses a query. It does not run SQL, so query
+  correctness is not covered — exercise that against a running backend.
+- An autouse fixture blocks `socket.connect`. A test that reaches for the
+  network fails rather than hanging.
+
+There is no frontend test suite.
 
 Two ruff exemptions are deliberate and should not be "cleaned up":
 

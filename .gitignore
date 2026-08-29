@@ -3,6 +3,10 @@
 __pycache__/
 *.pyc
 *.db
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
 node_modules/
 .expo/
 dist/
