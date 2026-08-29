@@ -126,20 +126,40 @@ def test_truncates_the_offending_response_to_200_chars(anthropic_stub):
     assert "x" * 201 not in str(excinfo.value)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Gap: when the response contains brackets but the slice between them is "
-        "still not valid JSON, json.loads raises straight out of the except "
-        "block, so callers see a bare JSONDecodeError instead of the clear "
-        "ValueError the no-bracket path gives them."
-    ),
-)
-def test_malformed_json_between_brackets_should_also_raise_a_clear_error(anthropic_stub):
+def test_malformed_json_between_brackets_also_raises_a_clear_error(anthropic_stub):
+    """Brackets present but unparseable must not leak a bare JSONDecodeError."""
     with pytest.raises(ValueError) as excinfo:
         call(anthropic_stub, "Sure! [not valid json at all] done")
 
     assert not isinstance(excinfo.value, json.JSONDecodeError)
+    assert "not valid JSON" in str(excinfo.value)
+    # The whole response is quoted, not just the bracketed slice.
+    assert "Sure!" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Sure! [not valid json at all] done",
+        "[oops]",
+        "[1, 2,]",
+        "prose [not json] more prose",
+        '[{"type": "open_ended",}]',
+    ],
+)
+def test_every_unparseable_bracket_shape_raises_the_same_clear_error(
+    anthropic_stub, text
+):
+    with pytest.raises(ValueError) as excinfo:
+        call(anthropic_stub, text)
+
+    assert not isinstance(excinfo.value, json.JSONDecodeError)
+    assert "not valid JSON" in str(excinfo.value)
+
+
+def test_an_empty_array_recovered_from_prose_is_not_an_error(anthropic_stub):
+    """"[ ]" between brackets parses fine; it means no questions, not a failure."""
+    assert call(anthropic_stub, "prose [ ] more prose") == []
 
 
 # ---------------------------------------------------------------------------

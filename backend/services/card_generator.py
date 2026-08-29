@@ -54,6 +54,17 @@ QUESTIONS_JSON_SCHEMA = {
 }
 
 
+def _not_valid_json_error(raw: str) -> ValueError:
+    """The error raised whenever a response cannot be parsed as questions.
+
+    Callers get this rather than a bare JSONDecodeError, and the message quotes
+    the start of the response so a failure can be diagnosed from a log.
+    """
+    return ValueError(
+        "Anthropic response was not valid JSON. First 200 chars: %s" % repr(raw[:200])
+    )
+
+
 def generate_cards(
     project_description: str,
     project_type: str,
@@ -101,13 +112,13 @@ def generate_cards(
         # Try to extract a JSON array from the response (e.g. preamble or trailing text)
         start = raw.find("[")
         end = raw.rfind("]")
-        if start != -1 and end != -1 and end > start:
+        if start == -1 or end == -1 or end <= start:
+            raise _not_valid_json_error(raw) from None
+        try:
             questions = json.loads(raw[start : end + 1])
-        else:
-            raise ValueError(
-                "Anthropic response was not valid JSON. First 200 chars: %s"
-                % repr(raw[:200])
-            ) from None
+        except json.JSONDecodeError:
+            # Brackets were there, but what sat between them was not an array.
+            raise _not_valid_json_error(raw) from None
     now = datetime.now(timezone.utc).isoformat()
 
     cards = []
